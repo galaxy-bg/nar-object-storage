@@ -1,0 +1,12 @@
+---
+- name: Deploy NAR Object Storage appliance
+  hosts: localhost
+  become: true
+  gather_facts: true
+
+  roles:
+    - base
+    - security
+    - storage
+    - rustfs
+    - firewall

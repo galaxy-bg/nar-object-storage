@@ -1,0 +1,47 @@
+---
+appliance:
+  hostname: nar-node-01
+  fqdn: nar-node-01.storage.kronosdx.local
+  admin_user: nosadmin
+
+management:
+  location:
+    site: primary-dc
+    rack: rack-01
+
+network:
+  management:
+    interface: ens160
+    ip: 192.168.20.101
+    prefix: 24
+    gateway: 192.168.20.1
+    dns:
+      - 192.168.20.10
+    ntp:
+      - time.storage.kronosdx.local
+    vlan_id: null
+  data:
+    mode: shared
+    interface: null
+    ip: null
+    prefix: null
+    gateway: null
+    vlan_id: null
+
+cluster:
+  mode: create
+  name: nar-cluster-01
+  domain: storage.kronosdx.local
+  endpoint: s3.nar-cluster-01.storage.kronosdx.local
+  expected_nodes: 4
+  join_endpoint: null
+  join_token_file: null
+
+storage:
+  disks:
+    - /dev/sdb
+    - /dev/sdc
+  wipe_confirmed: true
+
+security:
+  mfa_enabled: false

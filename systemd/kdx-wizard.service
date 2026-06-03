@@ -1,0 +1,15 @@
+[Unit]
+Description=NAR Object Storage First Boot Wizard
+After=network-online.target kdx-agent.service
+Wants=network-online.target
+Requires=kdx-agent.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --rm --name kdx-wizard -p 8443:8443 localhost/kdx-wizard:latest
+ExecStop=/usr/bin/podman stop kdx-wizard
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

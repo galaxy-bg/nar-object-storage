@@ -1,0 +1,7 @@
+product: NAR Object Storage
+short_name: NOS
+version: 0.1.0-milestone1
+birth_moment: 2026-01-01T00:00:00Z
+source_revision: unknown
+install_layout: appliance
+config_schema: 1

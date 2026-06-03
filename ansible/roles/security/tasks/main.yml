@@ -1,0 +1,4 @@
+---
+- name: Security role placeholder
+  ansible.builtin.debug:
+    msg: "Configure nosadmin and future root hardening."

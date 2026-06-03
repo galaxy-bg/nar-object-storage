@@ -1,0 +1,4 @@
+---
+- name: Storage role placeholder
+  ansible.builtin.debug:
+    msg: "Prepare selected disks as XFS and mount under /kdx-data."

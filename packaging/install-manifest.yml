@@ -1,0 +1,50 @@
+---
+directories:
+  - path: /opt/kronosdx
+    mode: "0755"
+  - path: /etc/kronosdx
+    mode: "0700"
+  - path: /etc/kronosdx/secrets
+    mode: "0700"
+  - path: /var/lib/kronosdx
+    mode: "0755"
+  - path: /var/lib/kronosdx/agent
+    mode: "0750"
+  - path: /var/lib/kronosdx/wizard
+    mode: "0750"
+  - path: /var/lib/kronosdx/logs
+    mode: "0750"
+  - path: /kdx-data
+    mode: "0755"
+
+mappings:
+  - source: ansible
+    target: /opt/kronosdx/ansible
+  - source: agent
+    target: /opt/kronosdx/agent
+  - source: wizard
+    target: /opt/kronosdx/wizard
+  - source: scripts
+    target: /opt/kronosdx/scripts
+  - source: systemd
+    target: /opt/kronosdx/systemd
+
+generated_files:
+  - path: /etc/kronosdx/challenge.key
+    mode: "0600"
+  - path: /etc/kronosdx/secrets/agent.token
+    mode: "0600"
+  - path: /etc/kronosdx/secrets/maintenance.key
+    mode: "0600"
+  - path: /etc/kronosdx/firstboot.state
+    mode: "0600"
+  - path: /etc/kronosdx/version.yml
+    mode: "0644"
+
+lab_installer_options:
+  - name: --install-packages
+    description: Install lab dependencies with dnf.
+  - name: --no-build-image
+    description: Skip Podman wizard image build.
+  - name: --start-services
+    description: Enable and start kdx-agent and kdx-wizard.

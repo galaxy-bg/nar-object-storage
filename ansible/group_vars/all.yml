@@ -1,0 +1,6 @@
+---
+kdx_config_path: /etc/kronosdx/config.yml
+kdx_data_root: /kdx-data
+rustfs_api_port: 9000
+rustfs_console_port: 9001
+wizard_port: 8443

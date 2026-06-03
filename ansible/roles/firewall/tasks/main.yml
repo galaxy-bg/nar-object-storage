@@ -1,0 +1,4 @@
+---
+- name: Firewall role placeholder
+  ansible.builtin.debug:
+    msg: "Open appliance ports 8443, 9000, and 9001."

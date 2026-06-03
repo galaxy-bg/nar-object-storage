@@ -1,0 +1,4 @@
+---
+- name: RustFS role placeholder
+  ansible.builtin.debug:
+    msg: "Create and start the RustFS Podman systemd service."

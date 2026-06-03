@@ -1,0 +1,4 @@
+---
+- name: Base role placeholder
+  ansible.builtin.debug:
+    msg: "Install base packages and configure appliance identity."

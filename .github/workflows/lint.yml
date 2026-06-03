@@ -1,0 +1,15 @@
+name: lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax check
+        run: python -m compileall agent wizard
+      - name: Ansible syntax check
+        run: ansible-playbook -i ansible/inventory/localhost.ini ansible/site.yml --syntax-check

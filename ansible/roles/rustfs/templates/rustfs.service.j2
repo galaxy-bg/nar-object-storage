@@ -1,0 +1,14 @@
+[Unit]
+Description=RustFS object storage service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/podman run --rm --name rustfs -p 9000:9000 -p 9001:9001 rustfs/rustfs:latest
+ExecStop=/usr/bin/podman stop rustfs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
