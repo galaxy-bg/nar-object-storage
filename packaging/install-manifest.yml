@@ -43,7 +43,7 @@ generated_files:
 
 lab_installer_options:
   - name: --install-packages
-    description: Install lab dependencies with dnf.
+    description: Install appliance dependencies with dnf.
   - name: --no-build-image
     description: Skip Podman wizard image build.
   - name: --start-services

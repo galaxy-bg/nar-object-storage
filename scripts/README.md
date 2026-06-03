@@ -4,7 +4,8 @@ Installer and lab helper scripts live here.
 
 ## Appliance Helpers
 
-- `install-lab.sh`: copy the repository into the target appliance layout.
+- `install-appliance.sh`: copy the repository into the target appliance layout.
+- `install-lab.sh`: compatibility wrapper for `install-appliance.sh`.
 - `generate-challenge-key.sh`: generate a first-boot challenge key.
 - `run-local-agent.sh`: run the local agent for development.
 - `run-local-wizard.sh`: run the local wizard for development.

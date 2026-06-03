@@ -27,7 +27,7 @@ sudo dnf install -y git python3 python3-pip ansible-core podman firewalld xfspro
 From the cloned repository:
 
 ```bash
-sudo ./scripts/install-lab.sh
+sudo ./scripts/install-appliance.sh
 ```
 
 This creates:
@@ -42,7 +42,7 @@ This creates:
 To test the filesystem layout without touching the host root:
 
 ```bash
-TARGET_ROOT=/tmp/kdx-rootfs ./scripts/install-lab.sh
+TARGET_ROOT=/tmp/kdx-rootfs ./scripts/install-appliance.sh
 ```
 
 ## Full Lab Install
@@ -50,7 +50,7 @@ TARGET_ROOT=/tmp/kdx-rootfs ./scripts/install-lab.sh
 On a fresh Rocky Linux 9 lab VM:
 
 ```bash
-sudo ./scripts/install-lab.sh --install-packages --start-services
+sudo ./scripts/install-appliance.sh --install-packages --start-services
 ```
 
 This will:

@@ -40,17 +40,17 @@ The repository is source code. A deployed appliance uses:
 For lab staging:
 
 ```bash
-TARGET_ROOT=/tmp/kdx-rootfs ./scripts/install-lab.sh
+TARGET_ROOT=/tmp/kdx-rootfs ./scripts/install-appliance.sh
 ```
 
 For a Rocky Linux lab VM:
 
 ```bash
-sudo ./scripts/install-lab.sh
+sudo ./scripts/install-appliance.sh
 ```
 
 For a full lab bootstrap on Rocky Linux 9:
 
 ```bash
-sudo ./scripts/install-lab.sh --install-packages --start-services
+sudo ./scripts/install-appliance.sh --install-packages --start-services
 ```
