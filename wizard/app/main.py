@@ -7,8 +7,11 @@ from app.agent_client import AgentClient, AgentUnavailable
 
 app = FastAPI(title="NAR Object Storage Wizard")
 
+STEPS = ("Challenge", "Setup", "Review", "Deploy", "Complete")
 
-def page(content: str) -> str:
+
+def page(content: str, step: str = "Challenge") -> str:
+    steps = render_steps(step)
     return f"""
     <!doctype html>
     <html lang="en">
@@ -258,6 +261,27 @@ def page(content: str) -> str:
             font-weight: 450;
             line-height: 1.4;
           }}
+          .steps {{
+            display: grid;
+            gap: 8px;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            margin: -8px 0 22px;
+          }}
+          .step {{
+            border-top: 3px solid rgba(128, 242, 215, 0.24);
+            color: #d1e8e1;
+            font-size: 13px;
+            font-weight: 700;
+            padding-top: 8px;
+          }}
+          .step.done {{
+            border-color: #80f2d7;
+            color: #80f2d7;
+          }}
+          .step.current {{
+            border-color: #ffffff;
+            color: #ffffff;
+          }}
           @media (max-width: 720px) {{
             .grid {{
               grid-template-columns: 1fr;
@@ -268,6 +292,9 @@ def page(content: str) -> str:
               gap: 10px;
             }}
             .choice-grid {{
+              grid-template-columns: 1fr;
+            }}
+            .steps {{
               grid-template-columns: 1fr;
             }}
           }}
@@ -359,11 +386,22 @@ def page(content: str) -> str:
               <p>Powered by KronosDX</p>
             </div>
           </div>
+          {steps}
           {content}
         </main>
       </body>
     </html>
     """
+
+
+def render_steps(current_step: str) -> str:
+    current_index = STEPS.index(current_step) if current_step in STEPS else 0
+    items = []
+    for index, label in enumerate(STEPS):
+        state = "current" if index == current_index else "done" if index < current_index else ""
+        class_name = f"step {state}".strip()
+        items.append(f'<div class="{class_name}">{index + 1}. {label}</div>')
+    return f'<nav class="steps" aria-label="Setup progress">{"".join(items)}</nav>'
 
 
 def interface_options(interfaces: list[dict], selected: str | None = None) -> str:
@@ -672,10 +710,10 @@ def setup() -> str:
               <span class="field-help">Hold Command or Ctrl to select multiple disks. Values come from lsblk through kdx-agent.</span>
             </label>
           </div>
-          <button type="submit">Review Configuration</button>
+          <button type="submit">Next: Review</button>
         </form>
       </section>
-    """)
+    """, step="Setup")
 
 
 @app.post("/review", response_class=HTMLResponse)
@@ -713,7 +751,7 @@ def review(
               <button type="submit">Back to Setup</button>
             </form>
           </section>
-        """), status_code=400)
+        """, step="Setup"), status_code=400)
 
     admin_user = "nosadmin"
     try:
@@ -748,7 +786,7 @@ def review(
               <button type="submit">Back to Setup</button>
             </form>
           </section>
-        """), status_code=400)
+        """, step="Setup"), status_code=400)
     disk_list = ", ".join(escape(disk) for disk in disks)
     data_network = "separate data uplink" if data_network_mode == "separate" else "management network"
     data_ip_summary = f"{escape(data_ip)}/{escape(data_prefix)}" if data_ip else "uses management IP"
@@ -785,7 +823,7 @@ def review(
           </form>
         </div>
       </section>
-    """)
+    """, step="Review")
 
 
 @app.post("/deploy", response_class=HTMLResponse)
@@ -846,7 +884,7 @@ def deploy(
               <button type="submit">Back to Setup</button>
             </form>
           </section>
-        """), status_code=503)
+        """, step="Deploy"), status_code=503)
 
     status = "Deployment Complete" if result.get("ok") else "Deployment Failed"
     status_code = 200 if result.get("ok") else 500
@@ -854,6 +892,8 @@ def deploy(
         part for part in [str(result.get("stdout", "")), str(result.get("stderr", ""))] if part.strip()
     )
     output_html = escape(output.strip() or "No Ansible output captured.")
+    complete_step = "Complete" if result.get("ok") else "Deploy"
+    action_label = "Edit Setup" if result.get("ok") else "Back to Setup"
     return HTMLResponse(page(f"""
       <section class="panel">
         <h2>{status}</h2>
@@ -862,10 +902,10 @@ def deploy(
         <p><strong>Return code:</strong> {escape(str(result.get("returncode", "unknown")))}</p>
         <pre>{output_html}</pre>
         <form method="get" action="/setup">
-          <button type="submit">Back to Setup</button>
+          <button type="submit">{action_label}</button>
         </form>
       </section>
-    """), status_code=status_code)
+    """, step=complete_step), status_code=status_code)
 
 
 def challenge_page(error: str | None = None) -> str:
@@ -881,4 +921,4 @@ def challenge_page(error: str | None = None) -> str:
           <p class="hint">Use the key from /etc/kronosdx/challenge.key on the appliance.</p>
         </form>
       </section>
-    """)
+    """, step="Challenge")
