@@ -143,6 +143,11 @@ start_services() {
   systemctl enable kdx-wizard.service
   systemctl restart kdx-agent.service
   systemctl restart kdx-wizard.service
+  sleep 2
+  systemctl --no-pager --full status kdx-agent.service kdx-wizard.service || true
+  if command -v ss >/dev/null 2>&1 && ! ss -tln | grep -q ':8443 '; then
+    echo "Warning: kdx-wizard is not listening on TCP port 8443 yet. Check journalctl -u kdx-wizard -n 80 --no-pager." >&2
+  fi
 }
 
 write_version_file() {
