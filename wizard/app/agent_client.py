@@ -7,6 +7,7 @@ import httpx
 
 AGENT_URL = os.environ.get("KDX_AGENT_URL", "http://127.0.0.1:7070")
 TIMEOUT_SECONDS = 3.0
+DEPLOY_TIMEOUT_SECONDS = 120.0
 
 
 class AgentUnavailable(RuntimeError):
@@ -29,9 +30,13 @@ class AgentClient:
         data = self._request("GET", "/discover/disks")
         return data.get("disks", [])
 
+    def deploy(self, config: dict[str, Any]) -> dict[str, Any]:
+        return self._request("POST", "/deploy", timeout=DEPLOY_TIMEOUT_SECONDS, json=config)
+
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        timeout = kwargs.pop("timeout", TIMEOUT_SECONDS)
         try:
-            with httpx.Client(timeout=TIMEOUT_SECONDS) as client:
+            with httpx.Client(timeout=timeout) as client:
                 response = client.request(method, f"{self.base_url}{path}", **kwargs)
                 response.raise_for_status()
                 return response.json()

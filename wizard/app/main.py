@@ -213,6 +213,32 @@ def page(content: str) -> str:
           button:hover {{
             background: #439c75;
           }}
+          .button-row {{
+            align-items: center;
+            display: flex;
+            gap: 12px;
+            margin-top: 18px;
+          }}
+          .button-row form {{
+            margin: 0;
+          }}
+          .secondary-button {{
+            background: #edf5f1;
+            color: #26343d;
+          }}
+          .secondary-button:hover {{
+            background: #dcece4;
+          }}
+          pre {{
+            background: #111a22;
+            border-radius: 6px;
+            color: #d9fff6;
+            font-size: 13px;
+            line-height: 1.45;
+            overflow: auto;
+            padding: 14px;
+            white-space: pre-wrap;
+          }}
           .error {{
             background: #fff1f0;
             border: 1px solid #ffc9c3;
@@ -391,6 +417,74 @@ def discovery() -> tuple[list[dict], list[dict], str]:
         return client.network_interfaces(), client.disks(), ""
     except AgentUnavailable as exc:
         return [], [], f"kdx-agent discovery is unavailable: {escape(str(exc))}"
+
+
+def split_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def optional_int(value: str) -> int | None:
+    value = value.strip()
+    return int(value) if value else None
+
+
+def hidden_inputs(payload: dict) -> str:
+    fields = []
+    for key, value in payload.items():
+        if isinstance(value, list):
+            for item in value:
+                fields.append(f'<input type="hidden" name="{escape(key)}" value="{escape(str(item))}">')
+        elif value is not None:
+            fields.append(f'<input type="hidden" name="{escape(key)}" value="{escape(str(value))}">')
+    return "\n".join(fields)
+
+
+def deploy_payload(
+    hostname: str,
+    node_fqdn: str,
+    admin_user: str,
+    management_interface: str,
+    management_ip: str,
+    management_prefix: str,
+    gateway: str,
+    dns: str,
+    ntp: str,
+    management_vlan_id: str,
+    data_network_mode: str,
+    data_interface: str,
+    data_ip: str,
+    data_prefix: str,
+    data_vlan_id: str,
+    cluster_mode: str,
+    cluster_name: str,
+    cluster_domain: str,
+    expected_nodes: str,
+    join_endpoint: str,
+    disks: list[str],
+) -> dict:
+    return {
+        "hostname": hostname,
+        "node_fqdn": node_fqdn,
+        "admin_user": admin_user or "nosadmin",
+        "management_interface": management_interface,
+        "management_ip": management_ip,
+        "management_prefix": optional_int(management_prefix),
+        "gateway": gateway,
+        "dns": split_csv(dns),
+        "ntp": split_csv(ntp),
+        "management_vlan_id": optional_int(management_vlan_id),
+        "data_network_mode": data_network_mode,
+        "data_interface": data_interface,
+        "data_ip": data_ip,
+        "data_prefix": optional_int(data_prefix),
+        "data_vlan_id": optional_int(data_vlan_id),
+        "cluster_mode": cluster_mode,
+        "cluster_name": cluster_name,
+        "cluster_domain": cluster_domain,
+        "expected_nodes": optional_int(expected_nodes),
+        "join_endpoint": join_endpoint,
+        "disks": disks,
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -593,10 +687,14 @@ def review(
     management_ip: str = Form(...),
     management_prefix: str = Form(...),
     gateway: str = Form(...),
+    dns: str = Form(""),
+    ntp: str = Form(""),
+    management_vlan_id: str = Form(""),
     data_network_mode: str = Form("shared"),
     data_interface: str = Form(""),
     data_ip: str = Form(""),
     data_prefix: str = Form(""),
+    data_vlan_id: str = Form(""),
     cluster_mode: str = Form(...),
     cluster_name: str = Form(""),
     cluster_domain: str = Form(""),
@@ -616,9 +714,35 @@ def review(
         """), status_code=400)
 
     admin_user = "nosadmin"
+    payload = deploy_payload(
+        hostname=hostname,
+        node_fqdn=node_fqdn,
+        admin_user=admin_user,
+        management_interface=management_interface,
+        management_ip=management_ip,
+        management_prefix=management_prefix,
+        gateway=gateway,
+        dns=dns,
+        ntp=ntp,
+        management_vlan_id=management_vlan_id,
+        data_network_mode=data_network_mode,
+        data_interface=data_interface,
+        data_ip=data_ip,
+        data_prefix=data_prefix,
+        data_vlan_id=data_vlan_id,
+        cluster_mode=cluster_mode,
+        cluster_name=cluster_name,
+        cluster_domain=cluster_domain,
+        expected_nodes=expected_nodes,
+        join_endpoint=join_endpoint,
+        disks=disks,
+    )
     disk_list = ", ".join(escape(disk) for disk in disks)
     data_network = "separate data uplink" if data_network_mode == "separate" else "management network"
     data_ip_summary = f"{escape(data_ip)}/{escape(data_prefix)}" if data_ip else "uses management IP"
+    dns_summary = escape(dns) if dns else "not set"
+    ntp_summary = escape(ntp) if ntp else "not set"
+    hidden = hidden_inputs(payload)
     return page(f"""
       <section class="panel">
         <h2>Review</h2>
@@ -628,6 +752,8 @@ def review(
         <p><strong>Management interface:</strong> {escape(management_interface)}</p>
         <p><strong>Management IP:</strong> {escape(management_ip)}/{escape(management_prefix)}</p>
         <p><strong>Gateway:</strong> {escape(gateway)}</p>
+        <p><strong>DNS:</strong> {dns_summary}</p>
+        <p><strong>NTP:</strong> {ntp_summary}</p>
         <p><strong>Data network:</strong> {data_network}</p>
         <p><strong>Data interface:</strong> {escape(data_interface) if data_interface else "management network"}</p>
         <p><strong>Data IP:</strong> {data_ip_summary}</p>
@@ -637,12 +763,97 @@ def review(
         <p><strong>Expected nodes:</strong> {escape(expected_nodes) if expected_nodes else "not set"}</p>
         <p><strong>Join endpoint:</strong> {escape(join_endpoint) if join_endpoint else "not set"}</p>
         <p><strong>Disks:</strong> {disk_list}</p>
-        <p class="hint">Deploy is not wired to kdx-agent yet. This preview confirms wizard navigation.</p>
+        <div class="button-row">
+          <form method="post" action="/deploy">
+            {hidden}
+            <button type="submit">Deploy Appliance</button>
+          </form>
+          <form method="get" action="/setup">
+            <button class="secondary-button" type="submit">Back to Setup</button>
+          </form>
+        </div>
+      </section>
+    """)
+
+
+@app.post("/deploy", response_class=HTMLResponse)
+def deploy(
+    hostname: str = Form(...),
+    node_fqdn: str = Form(""),
+    admin_user: str = Form("nosadmin"),
+    management_interface: str = Form(...),
+    management_ip: str = Form(...),
+    management_prefix: str = Form(...),
+    gateway: str = Form(...),
+    dns: list[str] = Form([]),
+    ntp: list[str] = Form([]),
+    management_vlan_id: str = Form(""),
+    data_network_mode: str = Form("shared"),
+    data_interface: str = Form(""),
+    data_ip: str = Form(""),
+    data_prefix: str = Form(""),
+    data_vlan_id: str = Form(""),
+    cluster_mode: str = Form(...),
+    cluster_name: str = Form(""),
+    cluster_domain: str = Form(""),
+    expected_nodes: str = Form(""),
+    join_endpoint: str = Form(""),
+    disks: list[str] = Form(...),
+) -> str:
+    payload = {
+        "hostname": hostname,
+        "node_fqdn": node_fqdn,
+        "admin_user": admin_user or "nosadmin",
+        "management_interface": management_interface,
+        "management_ip": management_ip,
+        "management_prefix": optional_int(management_prefix),
+        "gateway": gateway,
+        "dns": dns,
+        "ntp": ntp,
+        "management_vlan_id": optional_int(management_vlan_id),
+        "data_network_mode": data_network_mode,
+        "data_interface": data_interface,
+        "data_ip": data_ip,
+        "data_prefix": optional_int(data_prefix),
+        "data_vlan_id": optional_int(data_vlan_id),
+        "cluster_mode": cluster_mode,
+        "cluster_name": cluster_name,
+        "cluster_domain": cluster_domain,
+        "expected_nodes": optional_int(expected_nodes),
+        "join_endpoint": join_endpoint,
+        "disks": disks,
+    }
+
+    try:
+        result = AgentClient().deploy(payload)
+    except AgentUnavailable as exc:
+        return HTMLResponse(page(f"""
+          <section class="panel">
+            <div class="error">Deploy failed because kdx-agent is unavailable: {escape(str(exc))}</div>
+            <form method="get" action="/setup">
+              <button type="submit">Back to Setup</button>
+            </form>
+          </section>
+        """), status_code=503)
+
+    status = "Deployment Complete" if result.get("ok") else "Deployment Failed"
+    status_code = 200 if result.get("ok") else 500
+    output = "\n".join(
+        part for part in [str(result.get("stdout", "")), str(result.get("stderr", ""))] if part.strip()
+    )
+    output_html = escape(output.strip() or "No Ansible output captured.")
+    return HTMLResponse(page(f"""
+      <section class="panel">
+        <h2>{status}</h2>
+        <p><strong>Config:</strong> {escape(str(result.get("config_path", "unknown")))}</p>
+        <p><strong>Log:</strong> {escape(str(result.get("log_path", "unknown")))}</p>
+        <p><strong>Return code:</strong> {escape(str(result.get("returncode", "unknown")))}</p>
+        <pre>{output_html}</pre>
         <form method="get" action="/setup">
           <button type="submit">Back to Setup</button>
         </form>
       </section>
-    """)
+    """), status_code=status_code)
 
 
 def challenge_page(error: str | None = None) -> str:
