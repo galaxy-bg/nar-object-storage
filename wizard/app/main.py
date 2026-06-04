@@ -423,8 +423,10 @@ def split_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
-def optional_int(value: str) -> int | None:
-    value = value.strip()
+def optional_int(value) -> int | None:
+    if value is None:
+        return None
+    value = str(value).strip()
     return int(value) if value else None
 
 
@@ -714,29 +716,39 @@ def review(
         """), status_code=400)
 
     admin_user = "nosadmin"
-    payload = deploy_payload(
-        hostname=hostname,
-        node_fqdn=node_fqdn,
-        admin_user=admin_user,
-        management_interface=management_interface,
-        management_ip=management_ip,
-        management_prefix=management_prefix,
-        gateway=gateway,
-        dns=dns,
-        ntp=ntp,
-        management_vlan_id=management_vlan_id,
-        data_network_mode=data_network_mode,
-        data_interface=data_interface,
-        data_ip=data_ip,
-        data_prefix=data_prefix,
-        data_vlan_id=data_vlan_id,
-        cluster_mode=cluster_mode,
-        cluster_name=cluster_name,
-        cluster_domain=cluster_domain,
-        expected_nodes=expected_nodes,
-        join_endpoint=join_endpoint,
-        disks=disks,
-    )
+    try:
+        payload = deploy_payload(
+            hostname=hostname,
+            node_fqdn=node_fqdn,
+            admin_user=admin_user,
+            management_interface=management_interface,
+            management_ip=management_ip,
+            management_prefix=management_prefix,
+            gateway=gateway,
+            dns=dns,
+            ntp=ntp,
+            management_vlan_id=management_vlan_id,
+            data_network_mode=data_network_mode,
+            data_interface=data_interface,
+            data_ip=data_ip,
+            data_prefix=data_prefix,
+            data_vlan_id=data_vlan_id,
+            cluster_mode=cluster_mode,
+            cluster_name=cluster_name,
+            cluster_domain=cluster_domain,
+            expected_nodes=expected_nodes,
+            join_endpoint=join_endpoint,
+            disks=disks,
+        )
+    except (TypeError, ValueError) as exc:
+        return HTMLResponse(page(f"""
+          <section class="panel">
+            <div class="error">Invalid setup value: {escape(str(exc))}</div>
+            <form method="get" action="/setup">
+              <button type="submit">Back to Setup</button>
+            </form>
+          </section>
+        """), status_code=400)
     disk_list = ", ".join(escape(disk) for disk in disks)
     data_network = "separate data uplink" if data_network_mode == "separate" else "management network"
     data_ip_summary = f"{escape(data_ip)}/{escape(data_prefix)}" if data_ip else "uses management IP"
