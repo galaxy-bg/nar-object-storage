@@ -3,9 +3,9 @@ from html import escape
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-app = FastAPI(title="NAR Object Storage Wizard")
+from app.agent_client import AgentClient, AgentUnavailable
 
-DEV_CHALLENGE_KEY = "test123"
+app = FastAPI(title="NAR Object Storage Wizard")
 
 
 def page(content: str) -> str:
@@ -340,6 +340,59 @@ def page(content: str) -> str:
     """
 
 
+def interface_options(interfaces: list[dict], selected: str | None = None) -> str:
+    if not interfaces:
+        return '<option value="" disabled selected>No host interfaces discovered</option>'
+
+    options = []
+    for index, interface in enumerate(interfaces):
+        name = str(interface.get("name", ""))
+        if not name:
+            continue
+        state = str(interface.get("state", "UNKNOWN"))
+        ipv4 = ", ".join(str(address) for address in interface.get("ipv4", [])) or "no IPv4"
+        label = f"{name} - {state.lower()} - {ipv4}"
+        is_selected = selected == name or (selected is None and index == 0)
+        selected_attr = " selected" if is_selected else ""
+        options.append(f'<option value="{escape(name)}"{selected_attr}>{escape(label)}</option>')
+
+    return "\n".join(options) or '<option value="" disabled selected>No host interfaces discovered</option>'
+
+
+def disk_options(disks: list[dict]) -> str:
+    if not disks:
+        return '<option value="" disabled>No unused data disks discovered</option>'
+
+    options = []
+    for disk in disks:
+        path = str(disk.get("path", ""))
+        if not path:
+            continue
+        size = human_size(int(disk.get("size") or 0))
+        model = str(disk.get("model") or "unknown model")
+        label = f"{path} - {size} - {model}"
+        options.append(f'<option value="{escape(path)}">{escape(label)}</option>')
+
+    return "\n".join(options) or '<option value="" disabled>No unused data disks discovered</option>'
+
+
+def human_size(size_bytes: int) -> str:
+    size = float(size_bytes)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB", "PiB"):
+        if size < 1024 or unit == "PiB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size_bytes} B"
+
+
+def discovery() -> tuple[list[dict], list[dict], str]:
+    try:
+        client = AgentClient()
+        return client.network_interfaces(), client.disks(), ""
+    except AgentUnavailable as exc:
+        return [], [], f"kdx-agent discovery is unavailable: {escape(str(exc))}"
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     return challenge_page()
@@ -347,15 +400,27 @@ def index() -> str:
 
 @app.post("/challenge")
 def verify_challenge(challenge_key: str = Form(...)):
-    if challenge_key != DEV_CHALLENGE_KEY:
-        return HTMLResponse(challenge_page("Invalid challenge key. For local preview use test123."), status_code=401)
+    try:
+        valid = AgentClient().verify_challenge(challenge_key)
+    except AgentUnavailable as exc:
+        return HTMLResponse(challenge_page(f"kdx-agent is unavailable: {escape(str(exc))}"), status_code=503)
+
+    if not valid:
+        return HTMLResponse(challenge_page("Invalid challenge key."), status_code=401)
     return RedirectResponse("/setup", status_code=303)
 
 
 @app.get("/setup", response_class=HTMLResponse)
 def setup() -> str:
-    return page("""
+    interfaces, disks, discovery_error = discovery()
+    management_options = interface_options(interfaces)
+    data_options = interface_options(interfaces, selected="")
+    storage_options = disk_options(disks)
+    discovery_error_html = f'<div class="error">{discovery_error}</div>' if discovery_error else ""
+
+    return page(f"""
       <section class="panel">
+        {discovery_error_html}
         <h2>Appliance Bootstrap</h2>
         <p class="panel-intro">Configure the first node identity, networks, cluster identity, and storage disks.</p>
         <form method="post" action="/review">
@@ -393,11 +458,9 @@ def setup() -> str:
             <div class="section-title">Management Network</div>
             <label>Management interface
               <select name="management_interface" required>
-                <option value="ens160">ens160 - demo management NIC</option>
-                <option value="ens192">ens192 - demo secondary NIC</option>
-                <option value="eno1">eno1 - demo onboard NIC</option>
+                {management_options}
               </select>
-              <span class="field-help">Real appliance values will come from kdx-agent interface discovery.</span>
+              <span class="field-help">Discovered from the host through kdx-agent.</span>
             </label>
             <label>Management IP
               <input name="management_ip" required>
@@ -443,9 +506,7 @@ def setup() -> str:
             </div>
             <label>Data interface
               <select name="data_interface" data-network-field>
-                <option value="ens192">ens192 - demo 10G/25G data NIC</option>
-                <option value="ens224">ens224 - demo data NIC</option>
-                <option value="eno2">eno2 - demo onboard NIC</option>
+                {data_options}
               </select>
               <span class="field-help">Used for S3 traffic when a separate data uplink exists.</span>
             </label>
@@ -510,11 +571,9 @@ def setup() -> str:
             <div class="section-title">Storage</div>
             <label class="full-span">Disk selection
               <select name="disks" multiple required>
-                <option value="/dev/sdb">/dev/sdb - 500 GiB demo disk</option>
-                <option value="/dev/sdc">/dev/sdc - 500 GiB demo disk</option>
-                <option value="/dev/sdd">/dev/sdd - 1 TiB demo disk</option>
+                {storage_options}
               </select>
-              <span class="field-help">Hold Command or Ctrl to select multiple disks. Real values will come from lsblk through kdx-agent.</span>
+              <span class="field-help">Hold Command or Ctrl to select multiple disks. Values come from lsblk through kdx-agent.</span>
             </label>
           </div>
           <button type="submit">Review Configuration</button>
@@ -596,7 +655,7 @@ def challenge_page(error: str | None = None) -> str:
             <input name="challenge_key" type="password" autocomplete="one-time-code" required autofocus>
           </label>
           <button type="submit">Continue</button>
-          <p class="hint">Local preview key: test123</p>
+          <p class="hint">Use the key from /etc/kronosdx/challenge.key on the appliance.</p>
         </form>
       </section>
     """)

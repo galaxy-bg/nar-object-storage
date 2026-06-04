@@ -103,6 +103,17 @@ check_real_install_commands() {
   fi
 }
 
+install_agent_python_env() {
+  if [[ "$TARGET_ROOT" != "/" ]]; then
+    echo "Agent Python environment skipped for staged TARGET_ROOT=${TARGET_ROOT}."
+    return
+  fi
+
+  python3 -m venv /opt/kronosdx/agent/.venv
+  /opt/kronosdx/agent/.venv/bin/python -m pip install --upgrade pip
+  /opt/kronosdx/agent/.venv/bin/python -m pip install -r /opt/kronosdx/agent/requirements.txt
+}
+
 build_wizard_image() {
   if [[ "$BUILD_WIZARD_IMAGE" -eq 0 ]]; then
     echo "Wizard image build skipped."
@@ -129,8 +140,10 @@ start_services() {
     return
   fi
 
-  systemctl enable --now kdx-agent.service
-  systemctl enable --now kdx-wizard.service
+  systemctl enable kdx-agent.service
+  systemctl enable kdx-wizard.service
+  systemctl restart kdx-agent.service
+  systemctl restart kdx-wizard.service
 }
 
 write_version_file() {
@@ -182,6 +195,8 @@ copy_tree agent /opt/kronosdx/agent
 copy_tree wizard /opt/kronosdx/wizard
 copy_tree scripts /opt/kronosdx/scripts
 copy_tree systemd /opt/kronosdx/systemd
+
+install_agent_python_env
 
 if [[ ! -f "${TARGET_ROOT%/}/etc/kronosdx/challenge.key" ]]; then
   openssl rand -hex 16 > "${TARGET_ROOT%/}/etc/kronosdx/challenge.key"

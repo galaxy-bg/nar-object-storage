@@ -6,7 +6,7 @@ Requires=kdx-agent.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/podman run --rm --name kdx-wizard -p 8443:8443 localhost/kdx-wizard:latest
+ExecStart=/usr/bin/podman run --rm --name kdx-wizard --network host -e KDX_AGENT_URL=http://127.0.0.1:7070 localhost/kdx-wizard:latest
 ExecStop=/usr/bin/podman stop kdx-wizard
 Restart=always
 RestartSec=5

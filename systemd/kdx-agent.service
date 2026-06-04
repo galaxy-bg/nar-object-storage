@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=root
 WorkingDirectory=/opt/kronosdx/agent
-ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 7070
+ExecStart=/opt/kronosdx/agent/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 7070
 Restart=always
 RestartSec=5
 
