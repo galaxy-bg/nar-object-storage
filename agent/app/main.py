@@ -120,6 +120,17 @@ def discover_disks() -> dict[str, list[dict[str, Any]]]:
     return {"disks": disks}
 
 
+@app.get("/config")
+def read_config() -> dict[str, str]:
+    config_path = KDX_ETC / "config.yml"
+    try:
+        content = config_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {"path": str(config_path), "content": ""}
+
+    return {"path": str(config_path), "content": content}
+
+
 @app.post("/deploy")
 def deploy(payload: DeployRequest) -> dict[str, Any]:
     config = _deployment_config(payload)

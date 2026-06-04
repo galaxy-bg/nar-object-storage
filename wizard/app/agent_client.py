@@ -30,6 +30,9 @@ class AgentClient:
         data = self._request("GET", "/discover/disks")
         return data.get("disks", [])
 
+    def config(self) -> dict[str, Any]:
+        return self._request("GET", "/config")
+
     def deploy(self, config: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/deploy", timeout=DEPLOY_TIMEOUT_SECONDS, json=config)
 

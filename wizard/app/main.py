@@ -893,7 +893,23 @@ def deploy(
     )
     output_html = escape(output.strip() or "No Ansible output captured.")
     complete_step = "Complete" if result.get("ok") else "Deploy"
-    action_label = "Edit Setup" if result.get("ok") else "Back to Setup"
+    action_html = """
+        <div class="button-row">
+          <form method="get" action="/config">
+            <button type="submit">View Config</button>
+          </form>
+          <form method="get" action="/setup">
+            <button class="secondary-button" type="submit">Edit Setup</button>
+          </form>
+          <form method="get" action="/finish">
+            <button class="secondary-button" type="submit">Finish</button>
+          </form>
+        </div>
+    """ if result.get("ok") else """
+        <form method="get" action="/setup">
+          <button type="submit">Back to Setup</button>
+        </form>
+    """
     return HTMLResponse(page(f"""
       <section class="panel">
         <h2>{status}</h2>
@@ -901,11 +917,59 @@ def deploy(
         <p><strong>Log:</strong> {escape(str(result.get("log_path", "unknown")))}</p>
         <p><strong>Return code:</strong> {escape(str(result.get("returncode", "unknown")))}</p>
         <pre>{output_html}</pre>
-        <form method="get" action="/setup">
-          <button type="submit">{action_label}</button>
-        </form>
+        {action_html}
       </section>
     """, step=complete_step), status_code=status_code)
+
+
+@app.get("/config", response_class=HTMLResponse)
+def view_config() -> str:
+    try:
+        result = AgentClient().config()
+    except AgentUnavailable as exc:
+        return HTMLResponse(page(f"""
+          <section class="panel">
+            <div class="error">Config is unavailable because kdx-agent is unavailable: {escape(str(exc))}</div>
+            <form method="get" action="/setup">
+              <button type="submit">Back to Setup</button>
+            </form>
+          </section>
+        """, step="Complete"), status_code=503)
+
+    content = str(result.get("content") or "No config has been written yet.")
+    return page(f"""
+      <section class="panel">
+        <h2>Appliance Config</h2>
+        <p><strong>Path:</strong> {escape(str(result.get("path", "/etc/kronosdx/config.yml")))}</p>
+        <pre>{escape(content)}</pre>
+        <div class="button-row">
+          <form method="get" action="/finish">
+            <button type="submit">Finish</button>
+          </form>
+          <form method="get" action="/setup">
+            <button class="secondary-button" type="submit">Edit Setup</button>
+          </form>
+        </div>
+      </section>
+    """, step="Complete")
+
+
+@app.get("/finish", response_class=HTMLResponse)
+def finish() -> str:
+    return page("""
+      <section class="panel">
+        <h2>Appliance Ready</h2>
+        <p class="panel-intro">The first-boot configuration has been written and the deployment playbook completed successfully.</p>
+        <div class="button-row">
+          <form method="get" action="/config">
+            <button type="submit">View Config</button>
+          </form>
+          <form method="get" action="/setup">
+            <button class="secondary-button" type="submit">Edit Setup</button>
+          </form>
+        </div>
+      </section>
+    """, step="Complete")
 
 
 def challenge_page(error: str | None = None) -> str:
