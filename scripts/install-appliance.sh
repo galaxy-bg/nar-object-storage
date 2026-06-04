@@ -110,8 +110,7 @@ install_agent_python_env() {
   fi
 
   python3 -m venv /opt/kronosdx/agent/.venv
-  /opt/kronosdx/agent/.venv/bin/python -m pip install --upgrade pip
-  /opt/kronosdx/agent/.venv/bin/python -m pip install -r /opt/kronosdx/agent/requirements.txt
+  /opt/kronosdx/agent/.venv/bin/python -m pip install --disable-pip-version-check -r /opt/kronosdx/agent/requirements.txt
 }
 
 build_wizard_image() {
