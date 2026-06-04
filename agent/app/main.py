@@ -3,7 +3,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import yaml
 from fastapi import FastAPI
@@ -30,16 +30,16 @@ class DeployRequest(BaseModel):
     gateway: str
     dns: list[str] = Field(default_factory=list)
     ntp: list[str] = Field(default_factory=list)
-    management_vlan_id: int | None = None
+    management_vlan_id: Optional[int] = None
     data_network_mode: str = "shared"
     data_interface: str = ""
     data_ip: str = ""
-    data_prefix: int | None = None
-    data_vlan_id: int | None = None
+    data_prefix: Optional[int] = None
+    data_vlan_id: Optional[int] = None
     cluster_mode: str
     cluster_name: str = ""
     cluster_domain: str = ""
-    expected_nodes: int | None = None
+    expected_nodes: Optional[int] = None
     join_endpoint: str = ""
     disks: list[str]
 
