@@ -1,4 +1,56 @@
 ---
-- name: Firewall role placeholder
+- name: Check firewalld command availability
+  ansible.builtin.command:
+    cmd: firewall-cmd --version
+  changed_when: false
+
+- name: Ensure firewalld is enabled and running
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+
+- name: Build appliance firewall port list
+  ansible.builtin.set_fact:
+    kdx_firewall_ports:
+      - "{{ wizard_port }}/tcp"
+      - "{{ rustfs_api_port }}/tcp"
+      - "{{ rustfs_console_port }}/tcp"
+
+- name: Check permanent firewall ports
+  ansible.builtin.command:
+    cmd: firewall-cmd --permanent --query-port={{ item }}
+  changed_when: false
+  failed_when: false
+  register: kdx_firewall_port_checks
+  loop: "{{ kdx_firewall_ports }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Open appliance firewall ports permanently
+  ansible.builtin.command:
+    cmd: firewall-cmd --permanent --add-port={{ item.item }}
+  register: kdx_firewall_port_adds
+  changed_when: true
+  loop: "{{ kdx_firewall_port_checks.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.rc != 0
+
+- name: Reload firewalld after port changes
+  ansible.builtin.command:
+    cmd: firewall-cmd --reload
+  changed_when: true
+  when: >
+    kdx_firewall_port_adds is defined and
+    (kdx_firewall_port_adds.results | default([]) | selectattr('changed') | list | length > 0)
+
+- name: Report active appliance firewall ports
+  ansible.builtin.command:
+    cmd: firewall-cmd --list-ports
+  changed_when: false
+  register: kdx_firewall_active_ports
+
+- name: Show active appliance firewall ports
   ansible.builtin.debug:
-    msg: "Open appliance ports 8443, 9000, and 9001."
+    msg: "Active firewalld ports: {{ kdx_firewall_active_ports.stdout }}"
