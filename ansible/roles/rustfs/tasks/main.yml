@@ -1,4 +1,18 @@
 ---
+- name: Load appliance configuration
+  ansible.builtin.include_vars:
+    file: "{{ kdx_config_path }}"
+    name: kdx_config
+
+- name: Select RustFS bind IP
+  ansible.builtin.set_fact:
+    rustfs_bind_ip: >-
+      {{
+        kdx_config.network.data.ip
+        if kdx_config.network.data.mode == 'separate' and (kdx_config.network.data.ip | default('') | length > 0)
+        else kdx_config.network.management.ip
+      }}
+
 - name: Check storage plan
   ansible.builtin.stat:
     path: /var/lib/kronosdx/storage-plan.yml
@@ -89,7 +103,7 @@
   ansible.builtin.systemd:
     name: rustfs.service
     enabled: true
-    state: started
+    state: "{{ 'restarted' if rustfs_unit.changed else 'started' }}"
   when: rustfs_start | bool
 
 - name: Report RustFS deployment
@@ -97,6 +111,6 @@
     msg:
       - "RustFS image: {{ rustfs_image }}"
       - "RustFS data dir: {{ rustfs_data_dir }}"
-      - "RustFS API: http://0.0.0.0:{{ rustfs_api_port }}"
-      - "RustFS console: http://0.0.0.0:{{ rustfs_console_port }}"
+      - "RustFS API: http://{{ rustfs_bind_ip }}:{{ rustfs_api_port }}"
+      - "RustFS console: http://{{ rustfs_bind_ip }}:{{ rustfs_console_port }}"
       - "RustFS credentials file: {{ rustfs_env_file }}"
