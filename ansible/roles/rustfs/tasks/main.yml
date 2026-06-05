@@ -39,6 +39,22 @@
   loop_control:
     label: "{{ item }}"
 
+- name: Initialize NAR Object Storage container volume arguments
+  ansible.builtin.set_fact:
+    rustfs_podman_volume_mounts: []
+    rustfs_backend_volume_args: []
+
+- name: Build NAR Object Storage container volume arguments
+  ansible.builtin.set_fact:
+    rustfs_podman_volume_mounts: "{{ rustfs_podman_volume_mounts + ['-v ' ~ item ~ ':' ~ container_path ~ ':Z'] }}"
+    rustfs_backend_volume_args: "{{ rustfs_backend_volume_args + [container_path] }}"
+  vars:
+    container_path: "/data/disk{{ '%02d' | format(ansible_loop.index | int) }}"
+  loop: "{{ rustfs_data_dirs }}"
+  loop_control:
+    extended: true
+    label: "{{ item }}"
+
 - name: Ensure NAR Object Storage secret directory exists
   ansible.builtin.file:
     path: "{{ rustfs_env_file | dirname }}"

@@ -8,6 +8,10 @@
   ansible.builtin.set_fact:
     kdx_selected_disks: "{{ kdx_config.storage.disks | default([]) }}"
 
+- name: Select storage apply mode
+  ansible.builtin.set_fact:
+    kdx_storage_apply_effective: "{{ (kdx_storage_apply | bool) or (kdx_config.storage.wipe_confirmed | default(false) | bool) }}"
+
 - name: Require at least one selected storage disk
   ansible.builtin.assert:
     that:
@@ -99,12 +103,12 @@
     owner: root
     group: root
     mode: "0644"
-    content: "{{ {'storage': kdx_storage_plan, 'apply': kdx_storage_apply} | to_nice_yaml }}"
+    content: "{{ {'storage': kdx_storage_plan, 'apply': kdx_storage_apply_effective} | to_nice_yaml }}"
 
 - name: Report storage dry-run mode
   ansible.builtin.debug:
-    msg: "Storage apply is disabled. Wrote plan only. Set kdx_storage_apply=true to format and mount disks."
-  when: not kdx_storage_apply | bool
+    msg: "Storage apply is disabled. Wrote plan only. Set kdx_storage_apply=true or confirm disk wipe in the wizard to format and mount disks."
+  when: not kdx_storage_apply_effective | bool
 
 - name: Check existing filesystems on selected disks
   ansible.builtin.command:
@@ -115,7 +119,7 @@
   loop: "{{ kdx_storage_plan }}"
   loop_control:
     label: "{{ item.disk }}"
-  when: kdx_storage_apply | bool
+  when: kdx_storage_apply_effective | bool
 
 - name: Refuse to overwrite non-XFS filesystems
   ansible.builtin.assert:
@@ -125,7 +129,7 @@
   loop: "{{ kdx_existing_filesystems.results | default([]) }}"
   loop_control:
     label: "{{ item.item.disk }}"
-  when: kdx_storage_apply | bool
+  when: kdx_storage_apply_effective | bool
 
 - name: Create XFS filesystems on blank selected disks
   ansible.builtin.command:
@@ -134,7 +138,7 @@
   loop_control:
     label: "{{ item.item.disk }}"
   when:
-    - kdx_storage_apply | bool
+    - kdx_storage_apply_effective | bool
     - item.rc != 0
 
 - name: Check current storage mounts
@@ -146,7 +150,7 @@
   loop: "{{ kdx_storage_plan }}"
   loop_control:
     label: "{{ item.mount }}"
-  when: kdx_storage_apply | bool
+  when: kdx_storage_apply_effective | bool
 
 - name: Mount selected disks when needed
   ansible.builtin.command:
@@ -156,7 +160,7 @@
   loop_control:
     label: "{{ item.item.mount }}"
   when:
-    - kdx_storage_apply | bool
+    - kdx_storage_apply_effective | bool
     - item.rc != 0
 
 - name: Persist selected disk mounts in fstab
@@ -171,7 +175,7 @@
   loop: "{{ kdx_storage_plan }}"
   loop_control:
     label: "{{ item.disk }}"
-  when: kdx_storage_apply | bool
+  when: kdx_storage_apply_effective | bool
 
 - name: Mark mounted storage directories
   ansible.builtin.file:
@@ -183,4 +187,4 @@
   loop: "{{ kdx_storage_plan }}"
   loop_control:
     label: "{{ item.mount }}"
-  when: kdx_storage_apply | bool
+  when: kdx_storage_apply_effective | bool
