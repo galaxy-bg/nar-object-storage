@@ -13,8 +13,8 @@ kdx_base_packages:
   - sudo
   - xfsprogs
 kdx_storage_apply: false
-rustfs_container_name: rustfs
-rustfs_env_file: /etc/kronosdx/secrets/rustfs.env
+rustfs_container_name: nar-object-storage
+rustfs_env_file: /etc/kronosdx/secrets/nar-object-storage.env
 rustfs_image: docker.io/rustfs/rustfs:latest
 rustfs_pull_image: true
 rustfs_start: true

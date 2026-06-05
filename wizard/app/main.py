@@ -216,6 +216,20 @@ def page(content: str, step: str = "Challenge") -> str:
           button:hover {{
             background: #439c75;
           }}
+          .button-link {{
+            background: #4fb186;
+            border-radius: 6px;
+            color: white;
+            display: inline-block;
+            font: inherit;
+            font-weight: 700;
+            margin-top: 18px;
+            padding: 11px 16px;
+            text-decoration: none;
+          }}
+          .button-link:hover {{
+            background: #439c75;
+          }}
           .button-row {{
             align-items: center;
             display: flex;
@@ -229,7 +243,14 @@ def page(content: str, step: str = "Challenge") -> str:
             background: #edf5f1;
             color: #26343d;
           }}
+          .secondary-link {{
+            background: #edf5f1;
+            color: #26343d;
+          }}
           .secondary-button:hover {{
+            background: #dcece4;
+          }}
+          .secondary-link:hover {{
             background: #dcece4;
           }}
           pre {{
@@ -479,6 +500,31 @@ def hidden_inputs(payload: dict) -> str:
     return "\n".join(fields)
 
 
+def status_summary() -> str:
+    try:
+        status = AgentClient().status()
+    except AgentUnavailable:
+        return ""
+
+    console_url = str(status.get("console_url") or "")
+    api_url = str(status.get("api_url") or "")
+    credentials_path = str(status.get("credentials_path") or "")
+    access_key = str(status.get("access_key") or "")
+    console_action = (
+        f'<a class="button-link" href="{escape(console_url)}" target="_blank" rel="noreferrer">Open Console</a>'
+        if console_url
+        else ""
+    )
+    return f"""
+      <div class="section-title">Access</div>
+      <p><strong>Console:</strong> {escape(console_url) if console_url else "not available"}</p>
+      <p><strong>S3 API:</strong> {escape(api_url) if api_url else "not available"}</p>
+      <p><strong>Access key:</strong> {escape(access_key) if access_key else "not available"}</p>
+      <p><strong>Secret key file:</strong> {escape(credentials_path) if credentials_path else "not available"}</p>
+      {console_action}
+    """
+
+
 def deploy_payload(
     hostname: str,
     node_fqdn: str,
@@ -667,7 +713,7 @@ def setup() -> str:
                   <input name="cluster_mode" type="radio" value="create" checked>
                   Create first node
                 </span>
-                <span class="field-help">Prepare this appliance as the seed node. RustFS/Kubernetes bootstrap details will be generated later.</span>
+                <span class="field-help">Prepare this appliance as the seed node. Backend bootstrap details will be generated later.</span>
               </label>
               <label class="choice-card">
                 <span class="choice-title">
@@ -692,7 +738,7 @@ def setup() -> str:
                 <option value="8">8 nodes</option>
                 <option value="16">16 nodes</option>
               </select>
-              <span class="field-help">RustFS distributed guidance starts from 4 servers for safe multi-node mode.</span>
+              <span class="field-help">Distributed guidance starts from 4 servers for safe multi-node mode.</span>
             </label>
             <label>Existing cluster endpoint
               <input name="join_endpoint" data-cluster-join>
@@ -700,7 +746,7 @@ def setup() -> str:
             </label>
             <label>Join token
               <input name="join_token" type="password" data-cluster-join>
-              <span class="field-help">Placeholder for Kubernetes/control-plane join flow; not RustFS-specific yet.</span>
+              <span class="field-help">Placeholder for Kubernetes/control-plane join flow; not backend-specific yet.</span>
             </label>
             <div></div>
 
@@ -898,6 +944,7 @@ def deploy(
     )
     output_html = escape(output.strip() or "No Ansible output captured.")
     complete_step = "Complete" if result.get("ok") else "Deploy"
+    access_html = status_summary() if result.get("ok") else ""
     action_html = """
         <div class="button-row">
           <form method="get" action="/config">
@@ -922,6 +969,7 @@ def deploy(
         <p><strong>Log:</strong> {escape(str(result.get("log_path", "unknown")))}</p>
         <p><strong>Return code:</strong> {escape(str(result.get("returncode", "unknown")))}</p>
         <pre>{output_html}</pre>
+        {access_html}
         {action_html}
       </section>
     """, step=complete_step), status_code=status_code)
@@ -961,10 +1009,12 @@ def view_config() -> str:
 
 @app.get("/finish", response_class=HTMLResponse)
 def finish() -> str:
-    return page("""
+    access_html = status_summary()
+    return page(f"""
       <section class="panel">
         <h2>Appliance Ready</h2>
         <p class="panel-intro">The first-boot configuration has been written and the deployment playbook completed successfully.</p>
+        {access_html}
         <div class="button-row">
           <form method="get" action="/config">
             <button type="submit">View Config</button>

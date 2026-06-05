@@ -14,6 +14,8 @@ app = FastAPI(title="KronosDX Agent")
 KDX_ETC = Path(os.environ.get("KDX_ETC", "/etc/kronosdx"))
 KDX_OPT = Path(os.environ.get("KDX_OPT", "/opt/kronosdx"))
 KDX_STATE = Path(os.environ.get("KDX_STATE", "/var/lib/kronosdx"))
+NAR_CREDENTIALS_FILE = Path(os.environ.get("NAR_CREDENTIALS_FILE", "/etc/kronosdx/secrets/nar-object-storage.env"))
+LEGACY_RUSTFS_CREDENTIALS_FILE = Path("/etc/kronosdx/secrets/rustfs.env")
 
 
 class ChallengeRequest(BaseModel):
@@ -131,6 +133,29 @@ def read_config() -> dict[str, str]:
 
     content = _redacted_config(raw_content)
     return {"path": str(config_path), "content": content}
+
+
+@app.get("/status")
+def appliance_status() -> dict[str, Any]:
+    config_path = KDX_ETC / "config.yml"
+    firstboot_path = KDX_ETC / "firstboot.state"
+    config = _read_yaml_file(config_path)
+    bind_ip = _backend_bind_ip(config)
+    credential_path = NAR_CREDENTIALS_FILE if NAR_CREDENTIALS_FILE.exists() else LEGACY_RUSTFS_CREDENTIALS_FILE
+    credentials = _read_env_file(credential_path)
+
+    return {
+        "product": "NAR Object Storage",
+        "configured": firstboot_path.read_text(encoding="utf-8").strip() == "configured"
+        if firstboot_path.exists()
+        else False,
+        "config_path": str(config_path),
+        "credentials_path": str(credential_path),
+        "access_key": credentials.get("RUSTFS_ACCESS_KEY", "nosadmin"),
+        "api_url": f"http://{bind_ip}:9000" if bind_ip else "",
+        "console_url": f"http://{bind_ip}:9001" if bind_ip else "",
+        "backend_service": "rustfs.service",
+    }
 
 
 @app.post("/deploy")
@@ -257,3 +282,32 @@ def _redacted_config(content: str) -> str:
         return yaml.safe_dump(config, sort_keys=False)
     except yaml.YAMLError:
         return content
+
+
+def _read_yaml_file(path: Path) -> dict[str, Any]:
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (FileNotFoundError, yaml.YAMLError):
+        return {}
+
+
+def _backend_bind_ip(config: dict[str, Any]) -> str:
+    network = config.get("network", {})
+    data = network.get("data", {})
+    management = network.get("management", {})
+    if data.get("mode") == "separate" and data.get("ip"):
+        return str(data["ip"])
+    return str(management.get("ip", ""))
+
+
+def _read_env_file(path: Path) -> dict[str, str]:
+    values = {}
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+    except FileNotFoundError:
+        pass
+    return values
