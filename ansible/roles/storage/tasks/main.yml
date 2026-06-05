@@ -1,4 +1,186 @@
 ---
-- name: Storage role placeholder
+- name: Load appliance configuration
+  ansible.builtin.include_vars:
+    file: "{{ kdx_config_path }}"
+    name: kdx_config
+
+- name: Capture selected storage disks
+  ansible.builtin.set_fact:
+    kdx_selected_disks: "{{ kdx_config.storage.disks | default([]) }}"
+
+- name: Require at least one selected storage disk
+  ansible.builtin.assert:
+    that:
+      - kdx_selected_disks | length > 0
+    fail_msg: "No storage disks were selected in {{ kdx_config_path }}."
+
+- name: Collect block device details
+  ansible.builtin.command:
+    cmd: lsblk -J -b -o NAME,PATH,TYPE,SIZE,MOUNTPOINTS,FSTYPE
+  changed_when: false
+  register: kdx_lsblk
+
+- name: Parse block device details
+  ansible.builtin.set_fact:
+    kdx_block_devices: "{{ (kdx_lsblk.stdout | from_json).blockdevices | default([]) }}"
+
+- name: Find selected disks in block device inventory
+  ansible.builtin.set_fact:
+    kdx_found_disks: "{{ kdx_block_devices | selectattr('path', 'in', kdx_selected_disks) | list }}"
+
+- name: Ensure every selected disk exists
+  ansible.builtin.assert:
+    that:
+      - kdx_found_disks | length == kdx_selected_disks | length
+    fail_msg: "One or more selected disks were not found by lsblk: {{ kdx_selected_disks }}"
+
+- name: Ensure selected disks are whole disks
+  ansible.builtin.assert:
+    that:
+      - item.type == "disk"
+    fail_msg: "{{ item.path }} is not a whole disk."
+  loop: "{{ kdx_found_disks }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Ensure selected disks are not mounted
+  ansible.builtin.assert:
+    that:
+      - (item.mountpoints | default([]) | select('truthy') | list | length) == 0
+    fail_msg: "{{ item.path }} has mounted filesystems and will not be used."
+  loop: "{{ kdx_found_disks }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Ensure selected disks do not contain partitions
+  ansible.builtin.assert:
+    that:
+      - item.children | default([]) | length == 0
+    fail_msg: "{{ item.path }} contains partitions and will not be used."
+  loop: "{{ kdx_found_disks }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Build storage mount plan
+  ansible.builtin.set_fact:
+    kdx_storage_plan: "{{ kdx_storage_plan | default([]) + [storage_plan_item] }}"
+  vars:
+    disk_index: "{{ ansible_loop.index }}"
+    storage_plan_item:
+      disk: "{{ item }}"
+      mount: "{{ kdx_data_root }}/disk{{ '%02d' | format(disk_index | int) }}"
+      filesystem: xfs
+  loop: "{{ kdx_selected_disks }}"
+  loop_control:
+    extended: true
+
+- name: Ensure storage root exists
+  ansible.builtin.file:
+    path: "{{ kdx_data_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure planned mount directories exist
+  ansible.builtin.file:
+    path: "{{ item.mount }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ kdx_storage_plan }}"
+  loop_control:
+    label: "{{ item.mount }}"
+
+- name: Write storage plan
+  ansible.builtin.copy:
+    dest: /var/lib/kronosdx/storage-plan.yml
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ {'storage': kdx_storage_plan, 'apply': kdx_storage_apply} | to_nice_yaml }}"
+
+- name: Report storage dry-run mode
   ansible.builtin.debug:
-    msg: "Prepare selected disks as XFS and mount under /kdx-data."
+    msg: "Storage apply is disabled. Wrote plan only. Set kdx_storage_apply=true to format and mount disks."
+  when: not kdx_storage_apply | bool
+
+- name: Check existing filesystems on selected disks
+  ansible.builtin.command:
+    cmd: blkid -o value -s TYPE "{{ item.disk }}"
+  changed_when: false
+  failed_when: false
+  register: kdx_existing_filesystems
+  loop: "{{ kdx_storage_plan }}"
+  loop_control:
+    label: "{{ item.disk }}"
+  when: kdx_storage_apply | bool
+
+- name: Refuse to overwrite non-XFS filesystems
+  ansible.builtin.assert:
+    that:
+      - item.rc != 0 or item.stdout == "xfs"
+    fail_msg: "{{ item.item.disk }} already has filesystem {{ item.stdout }}. Refusing to overwrite it."
+  loop: "{{ kdx_existing_filesystems.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.disk }}"
+  when: kdx_storage_apply | bool
+
+- name: Create XFS filesystems on blank selected disks
+  ansible.builtin.command:
+    cmd: mkfs.xfs -f "{{ item.item.disk }}"
+  loop: "{{ kdx_existing_filesystems.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.disk }}"
+  when:
+    - kdx_storage_apply | bool
+    - item.rc != 0
+
+- name: Check current storage mounts
+  ansible.builtin.command:
+    cmd: findmnt --mountpoint "{{ item.mount }}"
+  changed_when: false
+  failed_when: false
+  register: kdx_current_mounts
+  loop: "{{ kdx_storage_plan }}"
+  loop_control:
+    label: "{{ item.mount }}"
+  when: kdx_storage_apply | bool
+
+- name: Mount selected disks when needed
+  ansible.builtin.command:
+    cmd: mount -o defaults,noatime "{{ item.item.disk }}" "{{ item.item.mount }}"
+  changed_when: true
+  loop: "{{ kdx_current_mounts.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.mount }}"
+  when:
+    - kdx_storage_apply | bool
+    - item.rc != 0
+
+- name: Persist selected disk mounts in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    line: "{{ item.disk }} {{ item.mount }} xfs defaults,noatime 0 2"
+    regexp: "^{{ item.disk | regex_escape }}\\s+"
+  loop: "{{ kdx_storage_plan }}"
+  loop_control:
+    label: "{{ item.disk }}"
+  when: kdx_storage_apply | bool
+
+- name: Mark mounted storage directories
+  ansible.builtin.file:
+    path: "{{ item.mount }}/.kdx-mounted"
+    state: touch
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ kdx_storage_plan }}"
+  loop_control:
+    label: "{{ item.mount }}"
+  when: kdx_storage_apply | bool
