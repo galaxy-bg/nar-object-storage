@@ -1,6 +1,15 @@
 ---
 kdx_config_path: /etc/kronosdx/config.yml
 kdx_data_root: /kdx-data
+kdx_base_packages:
+  - ansible-core
+  - firewalld
+  - jq
+  - openssl
+  - podman
+  - python3
+  - python3-pip
+  - xfsprogs
 kdx_storage_apply: false
 rustfs_container_name: rustfs
 rustfs_env_file: /etc/kronosdx/secrets/rustfs.env

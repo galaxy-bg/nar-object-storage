@@ -1,4 +1,64 @@
 ---
-- name: Base role placeholder
+- name: Load appliance configuration
+  ansible.builtin.include_vars:
+    file: "{{ kdx_config_path }}"
+    name: kdx_config
+
+- name: Ensure base appliance packages are installed
+  ansible.builtin.package:
+    name: "{{ kdx_base_packages }}"
+    state: present
+
+- name: Set appliance hostname
+  ansible.builtin.hostname:
+    name: "{{ kdx_config.appliance.hostname }}"
+  when: kdx_config.appliance.hostname | default('', true) | length > 0
+
+- name: Build appliance host aliases
+  ansible.builtin.set_fact:
+    kdx_host_aliases: >-
+      {{
+        [kdx_config.appliance.hostname]
+        + ([kdx_config.appliance.fqdn] if (kdx_config.appliance.fqdn | default('', true) | length > 0) else [])
+      }}
+
+- name: Register management IP in hosts file
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    regexp: "^{{ kdx_config.network.management.ip | regex_escape }}\\s+"
+    line: "{{ kdx_config.network.management.ip }} {{ kdx_host_aliases | unique | join(' ') }}"
+  when:
+    - kdx_config.network.management.ip | default('', true) | length > 0
+    - kdx_host_aliases | length > 0
+
+- name: Ensure appliance runtime directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - path: /etc/kronosdx
+      mode: "0700"
+    - path: /etc/kronosdx/secrets
+      mode: "0700"
+    - path: /var/lib/kronosdx
+      mode: "0755"
+    - path: /var/lib/kronosdx/logs
+      mode: "0750"
+    - path: "{{ kdx_data_root }}"
+      mode: "0755"
+  loop_control:
+    label: "{{ item.path }}"
+
+- name: Report appliance identity
   ansible.builtin.debug:
-    msg: "Install base packages and configure appliance identity."
+    msg:
+      - "Hostname: {{ kdx_config.appliance.hostname }}"
+      - "FQDN: {{ kdx_config.appliance.fqdn | default('not set', true) }}"
+      - "Management IP: {{ kdx_config.network.management.ip }}"
