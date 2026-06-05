@@ -1,4 +1,63 @@
 ---
-- name: Security role placeholder
+- name: Load appliance configuration
+  ansible.builtin.include_vars:
+    file: "{{ kdx_config_path }}"
+    name: kdx_config
+
+- name: Ensure wheel group exists
+  ansible.builtin.group:
+    name: wheel
+    state: present
+
+- name: Create appliance administrator
+  ansible.builtin.user:
+    name: "{{ kdx_config.appliance.admin_user | default('nosadmin', true) }}"
+    comment: NAR Object Storage administrator
+    groups: wheel
+    append: true
+    shell: /bin/bash
+    create_home: true
+    password: "{{ kdx_config.security.admin_password_hash }}"
+    update_password: always
+  no_log: true
+  when: kdx_config.security.admin_password_hash | default('', true) | length > 0
+
+- name: Create appliance administrator without password update
+  ansible.builtin.user:
+    name: "{{ kdx_config.appliance.admin_user | default('nosadmin', true) }}"
+    comment: NAR Object Storage administrator
+    groups: wheel
+    append: true
+    shell: /bin/bash
+    create_home: true
+  when: kdx_config.security.admin_password_hash | default('', true) | length == 0
+
+- name: Allow appliance administrator sudo access
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/{{ kdx_config.appliance.admin_user | default('nosadmin', true) }}"
+    owner: root
+    group: root
+    mode: "0440"
+    content: "{{ kdx_config.appliance.admin_user | default('nosadmin', true) }} ALL=(ALL) ALL\n"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Disable SSH root password login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin\\s+"
+    line: PermitRootLogin no
+    backup: true
+  register: kdx_sshd_root_login
+
+- name: Restart sshd after hardening changes
+  ansible.builtin.systemd:
+    name: sshd
+    state: restarted
+  when: kdx_sshd_root_login.changed
+
+- name: Report security baseline
   ansible.builtin.debug:
-    msg: "Configure nosadmin and future root hardening."
+    msg:
+      - "Administrator: {{ kdx_config.appliance.admin_user | default('nosadmin', true) }}"
+      - "Sudo policy: /etc/sudoers.d/{{ kdx_config.appliance.admin_user | default('nosadmin', true) }}"
+      - "SSH root login: disabled"

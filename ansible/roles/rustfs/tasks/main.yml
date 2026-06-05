@@ -109,8 +109,8 @@
 - name: Report RustFS deployment
   ansible.builtin.debug:
     msg:
-      - "RustFS image: {{ rustfs_image }}"
-      - "RustFS data dir: {{ rustfs_data_dir }}"
-      - "RustFS API: http://{{ rustfs_bind_ip }}:{{ rustfs_api_port }}"
-      - "RustFS console: http://{{ rustfs_bind_ip }}:{{ rustfs_console_port }}"
-      - "RustFS credentials file: {{ rustfs_env_file }}"
+      - "NAR Object Storage image: {{ rustfs_image }}"
+      - "NAR Object Storage data dir: {{ rustfs_data_dir }}"
+      - "NAR Object Storage API: http://{{ rustfs_bind_ip }}:{{ rustfs_api_port }}"
+      - "NAR Object Storage console: http://{{ rustfs_bind_ip }}:{{ rustfs_console_port }}"
+      - "NAR Object Storage credentials file: {{ rustfs_env_file }}"

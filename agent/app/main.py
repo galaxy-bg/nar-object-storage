@@ -24,6 +24,7 @@ class DeployRequest(BaseModel):
     hostname: str
     node_fqdn: str = ""
     admin_user: str = "nosadmin"
+    admin_password: str = ""
     management_interface: str
     management_ip: str
     management_prefix: int
@@ -124,10 +125,11 @@ def discover_disks() -> dict[str, list[dict[str, Any]]]:
 def read_config() -> dict[str, str]:
     config_path = KDX_ETC / "config.yml"
     try:
-        content = config_path.read_text(encoding="utf-8")
+        raw_content = config_path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return {"path": str(config_path), "content": ""}
 
+    content = _redacted_config(raw_content)
     return {"path": str(config_path), "content": content}
 
 
@@ -189,6 +191,7 @@ def _has_mountpoint(device: dict[str, Any]) -> bool:
 
 def _deployment_config(payload: DeployRequest) -> dict[str, Any]:
     data_network_separate = payload.data_network_mode == "separate"
+    admin_password_hash = _hash_password(payload.admin_password) if payload.admin_password else None
     return {
         "appliance": {
             "hostname": payload.hostname,
@@ -228,6 +231,29 @@ def _deployment_config(payload: DeployRequest) -> dict[str, Any]:
             "wipe_confirmed": True,
         },
         "security": {
+            "admin_password_hash": admin_password_hash,
             "mfa_enabled": False,
         },
     }
+
+
+def _hash_password(password: str) -> str:
+    result = subprocess.run(
+        ["openssl", "passwd", "-6", "-stdin"],
+        input=password,
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def _redacted_config(content: str) -> str:
+    try:
+        config = yaml.safe_load(content) or {}
+        security = config.get("security", {})
+        if "admin_password_hash" in security:
+            security["admin_password_hash"] = "<redacted>"
+        return yaml.safe_dump(config, sort_keys=False)
+    except yaml.YAMLError:
+        return content

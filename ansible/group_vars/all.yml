@@ -5,10 +5,12 @@ kdx_base_packages:
   - ansible-core
   - firewalld
   - jq
+  - openssh-server
   - openssl
   - podman
   - python3
   - python3-pip
+  - sudo
   - xfsprogs
 kdx_storage_apply: false
 rustfs_container_name: rustfs
