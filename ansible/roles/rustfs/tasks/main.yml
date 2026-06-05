@@ -24,24 +24,20 @@
     name: rustfs_storage_plan
   when: rustfs_storage_plan_file.stat.exists
 
-- name: Select NAR Object Storage data directory
+- name: Select NAR Object Storage data directories
   ansible.builtin.set_fact:
-    rustfs_data_dir: >-
-      {{
-        (
-          rustfs_storage_plan.storage[0].mount
-          if rustfs_storage_plan_file.stat.exists and (rustfs_storage_plan.storage | default([]) | length > 0)
-          else '/var/lib/kronosdx/rustfs-single'
-        ) ~ '/rustfs'
-      }}
+    rustfs_data_dirs: "{{ rustfs_storage_plan.storage | map(attribute='mount') | map('regex_replace', '$', '/rustfs') | list if rustfs_storage_plan_file.stat.exists and (rustfs_storage_plan.storage | default([]) | length > 0) else ['/var/lib/kronosdx/rustfs-single/rustfs'] }}"
 
-- name: Ensure NAR Object Storage data directory exists
+- name: Ensure NAR Object Storage data directories exist
   ansible.builtin.file:
-    path: "{{ rustfs_data_dir }}"
+    path: "{{ item }}"
     state: directory
     owner: "10001"
     group: "10001"
     mode: "0750"
+  loop: "{{ rustfs_data_dirs }}"
+  loop_control:
+    label: "{{ item }}"
 
 - name: Ensure NAR Object Storage secret directory exists
   ansible.builtin.file:
@@ -134,7 +130,7 @@
   ansible.builtin.debug:
     msg:
       - "NAR Object Storage image: {{ rustfs_image }}"
-      - "NAR Object Storage data dir: {{ rustfs_data_dir }}"
+      - "NAR Object Storage data dirs: {{ rustfs_data_dirs | join(', ') }}"
       - "NAR Object Storage API: http://{{ rustfs_bind_ip }}:{{ rustfs_api_port }}"
       - "NAR Object Storage console: http://{{ rustfs_bind_ip }}:{{ rustfs_console_port }}"
       - "NAR Object Storage credentials file: {{ rustfs_env_file }}"
