@@ -1,8 +1,15 @@
 ---
 - name: Check firewalld command availability
-  ansible.builtin.command:
-    cmd: firewall-cmd --version
-  changed_when: false
+  ansible.builtin.stat:
+    path: /usr/bin/firewall-cmd
+  register: kdx_firewall_cmd
+
+- name: Require firewalld command
+  ansible.builtin.assert:
+    that:
+      - kdx_firewall_cmd.stat.exists
+      - kdx_firewall_cmd.stat.executable
+    fail_msg: "firewall-cmd was not found. Install firewalld before running the firewall role."
 
 - name: Ensure firewalld is enabled and running
   ansible.builtin.systemd:
