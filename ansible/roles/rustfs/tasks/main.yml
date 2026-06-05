@@ -25,8 +25,8 @@
   ansible.builtin.file:
     path: "{{ rustfs_data_dir }}"
     state: directory
-    owner: root
-    group: root
+    owner: "10001"
+    group: "10001"
     mode: "0750"
 
 - name: Ensure RustFS secret directory exists
