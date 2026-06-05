@@ -182,6 +182,8 @@ def appliance_status() -> dict[str, Any]:
 
     return {
         "product": "NAR Object Storage",
+        "backend_engine": "RustFS",
+        "backend_engine_description": "S3-compatible object storage backend",
         "configured": firstboot_path.read_text(encoding="utf-8").strip() == "configured"
         if firstboot_path.exists()
         else False,

@@ -64,6 +64,12 @@ def page(content: str, step: str = "Challenge") -> str:
             font-weight: 650;
             margin: 0;
           }}
+          .brand .backend-attribution {{
+            color: #d1e8e1;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 6px;
+          }}
           .panel {{
             background: white;
             border: 1px solid #d8e3de;
@@ -436,6 +442,7 @@ def page(content: str, step: str = "Challenge") -> str:
             <div>
               <h1>NAR Object Storage</h1>
               <p>Powered by KronosDX</p>
+              <p class="backend-attribution">S3-compatible backend engine: RustFS</p>
             </div>
           </div>
           {steps}
@@ -541,6 +548,8 @@ def status_summary() -> str:
     api_url = str(status.get("api_url") or "")
     credentials_path = str(status.get("credentials_path") or "")
     access_key = str(status.get("access_key") or "")
+    backend_engine = str(status.get("backend_engine") or "RustFS")
+    backend_description = str(status.get("backend_engine_description") or "S3-compatible object storage backend")
     console_action = (
         f'<a class="button-link" href="{escape(console_url)}" target="_blank" rel="noreferrer">Open Console</a>'
         if console_url
@@ -550,6 +559,7 @@ def status_summary() -> str:
       <div class="section-title">Access</div>
       <p><strong>Console:</strong> {escape(console_url) if console_url else "not available"}</p>
       <p><strong>S3 API:</strong> {escape(api_url) if api_url else "not available"}</p>
+      <p><strong>Backend engine:</strong> {escape(backend_engine)} - {escape(backend_description)}</p>
       <p><strong>Access key:</strong> {escape(access_key) if access_key else "not available"}</p>
       <p><strong>Secret key file:</strong> {escape(credentials_path) if credentials_path else "not available"}</p>
       {console_action}
