@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE="${RUSTFS_IMAGE:-rustfs/rustfs:latest}"
+IMAGE="${RUSTFS_IMAGE:-docker.io/rustfs/rustfs:latest}"
 DATA_DIR="${RUSTFS_DATA_DIR:-/var/lib/kronosdx/rustfs-single}"
 CONTAINER_NAME="${RUSTFS_CONTAINER_NAME:-nos-rustfs-single}"
 API_PORT="${RUSTFS_API_PORT:-9000}"
