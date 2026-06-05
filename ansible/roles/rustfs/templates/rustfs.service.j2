@@ -5,8 +5,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/podman run --rm --name rustfs -p 9000:9000 -p 9001:9001 rustfs/rustfs:latest
-ExecStop=/usr/bin/podman stop rustfs
+EnvironmentFile={{ rustfs_env_file }}
+ExecStartPre=-/usr/bin/podman rm -f {{ rustfs_container_name }}
+ExecStart=/usr/bin/podman run --rm --name {{ rustfs_container_name }} -p {{ rustfs_api_port }}:9000 -p {{ rustfs_console_port }}:9001 --env-file {{ rustfs_env_file }} -v {{ rustfs_data_dir }}:/data:Z {{ rustfs_image }} /data
+ExecStop=-/usr/bin/podman stop -t 10 {{ rustfs_container_name }}
 Restart=always
 RestartSec=5
 

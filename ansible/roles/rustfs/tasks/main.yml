@@ -1,4 +1,102 @@
 ---
-- name: RustFS role placeholder
+- name: Check storage plan
+  ansible.builtin.stat:
+    path: /var/lib/kronosdx/storage-plan.yml
+  register: rustfs_storage_plan_file
+
+- name: Load storage plan
+  ansible.builtin.include_vars:
+    file: /var/lib/kronosdx/storage-plan.yml
+    name: rustfs_storage_plan
+  when: rustfs_storage_plan_file.stat.exists
+
+- name: Select RustFS data directory
+  ansible.builtin.set_fact:
+    rustfs_data_dir: >-
+      {{
+        (
+          rustfs_storage_plan.storage[0].mount
+          if rustfs_storage_plan_file.stat.exists and (rustfs_storage_plan.storage | default([]) | length > 0)
+          else '/var/lib/kronosdx/rustfs-single'
+        ) ~ '/rustfs'
+      }}
+
+- name: Ensure RustFS data directory exists
+  ansible.builtin.file:
+    path: "{{ rustfs_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Ensure RustFS secret directory exists
+  ansible.builtin.file:
+    path: "{{ rustfs_env_file | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Check RustFS secret environment file
+  ansible.builtin.stat:
+    path: "{{ rustfs_env_file }}"
+  register: rustfs_env_stat
+
+- name: Generate RustFS secret key
+  ansible.builtin.command:
+    cmd: openssl rand -hex 24
+  changed_when: false
+  register: rustfs_secret_key
+  no_log: true
+  when: not rustfs_env_stat.stat.exists
+
+- name: Write RustFS secret environment file
+  ansible.builtin.copy:
+    dest: "{{ rustfs_env_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      RUSTFS_ACCESS_KEY=nosadmin
+      RUSTFS_SECRET_KEY={{ rustfs_secret_key.stdout }}
+      RUSTFS_CONSOLE_ENABLE=true
+      RUST_LOG=error
+  no_log: true
+  when: not rustfs_env_stat.stat.exists
+
+- name: Pull RustFS image
+  ansible.builtin.command:
+    cmd: podman pull "{{ rustfs_image }}"
+  register: rustfs_image_pull
+  changed_when: "'Downloaded newer image' in rustfs_image_pull.stdout or 'Copying blob' in rustfs_image_pull.stdout"
+  when: rustfs_pull_image | bool
+
+- name: Install RustFS systemd unit
+  ansible.builtin.template:
+    src: rustfs.service.j2
+    dest: /etc/systemd/system/rustfs.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: rustfs_unit
+
+- name: Reload systemd after RustFS unit changes
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: rustfs_unit.changed
+
+- name: Enable and start RustFS service
+  ansible.builtin.systemd:
+    name: rustfs.service
+    enabled: true
+    state: started
+  when: rustfs_start | bool
+
+- name: Report RustFS deployment
   ansible.builtin.debug:
-    msg: "Create and start the RustFS Podman systemd service."
+    msg:
+      - "RustFS image: {{ rustfs_image }}"
+      - "RustFS data dir: {{ rustfs_data_dir }}"
+      - "RustFS API: http://0.0.0.0:{{ rustfs_api_port }}"
+      - "RustFS console: http://0.0.0.0:{{ rustfs_console_port }}"
+      - "RustFS credentials file: {{ rustfs_env_file }}"
