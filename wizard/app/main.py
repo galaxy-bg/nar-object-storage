@@ -230,6 +230,34 @@ def page(content: str, step: str = "Challenge") -> str:
           .button-link:hover {{
             background: #439c75;
           }}
+          .terminal-command-grid {{
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin-top: 18px;
+          }}
+          .terminal-command-grid form {{
+            margin: 0;
+          }}
+          .terminal-command-grid button {{
+            margin: 0;
+            min-height: 46px;
+            width: 100%;
+          }}
+          .terminal-meta {{
+            background: #edf5f1;
+            border: 1px solid #d8e3de;
+            border-radius: 6px;
+            color: #26343d;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 12px;
+            margin: 18px 0 10px;
+            padding: 10px 12px;
+            overflow-wrap: anywhere;
+          }}
+          .terminal-output {{
+            max-height: 560px;
+          }}
           .button-row {{
             align-items: center;
             display: flex;
@@ -316,6 +344,9 @@ def page(content: str, step: str = "Challenge") -> str:
               grid-template-columns: 1fr;
             }}
             .steps {{
+              grid-template-columns: 1fr;
+            }}
+            .terminal-command-grid {{
               grid-template-columns: 1fr;
             }}
           }}
@@ -523,6 +554,67 @@ def status_summary() -> str:
       <p><strong>Secret key file:</strong> {escape(credentials_path) if credentials_path else "not available"}</p>
       {console_action}
     """
+
+
+def terminal_command_buttons(commands: list[dict[str, str]]) -> str:
+    buttons = []
+    for command in commands:
+        command_id = str(command.get("id", ""))
+        label = str(command.get("label", command_id))
+        if not command_id:
+            continue
+        buttons.append(f"""
+          <form method="post" action="/terminal">
+            <input type="hidden" name="command_id" value="{escape(command_id)}">
+            <button class="secondary-button" type="submit">{escape(label)}</button>
+          </form>
+        """)
+    return "".join(buttons)
+
+
+def terminal_panel(command_id: str = "deploy-log") -> HTMLResponse:
+    try:
+        client = AgentClient()
+        commands = client.operation_commands()
+        result = client.run_operation(command_id)
+    except AgentUnavailable as exc:
+        return HTMLResponse(page(f"""
+          <section class="panel">
+            <div class="error">Operations terminal is unavailable because kdx-agent is unavailable: {escape(str(exc))}</div>
+            <form method="get" action="/finish">
+              <button type="submit">Back to Finish</button>
+            </form>
+          </section>
+        """, step="Complete"), status_code=503)
+
+    command_buttons = terminal_command_buttons(commands)
+    output = str(result.get("output") or "No output.")
+    command = str(result.get("command") or command_id)
+    label = str(result.get("label") or command_id)
+    returncode = str(result.get("returncode", ""))
+    return HTMLResponse(page(f"""
+      <section class="panel">
+        <h2>Operations Terminal</h2>
+        <p class="panel-intro">Run appliance diagnostics and inspect first-boot logs from the browser.</p>
+        <div class="terminal-command-grid">
+          {command_buttons}
+        </div>
+        <div class="terminal-meta">
+          <strong>{escape(label)}</strong><br>
+          $ {escape(command)}<br>
+          return code: {escape(returncode)}
+        </div>
+        <pre class="terminal-output">{escape(output)}</pre>
+        <div class="button-row">
+          <form method="get" action="/finish">
+            <button type="submit">Back to Finish</button>
+          </form>
+          <form method="get" action="/config">
+            <button class="secondary-button" type="submit">View Config</button>
+          </form>
+        </div>
+      </section>
+    """, step="Complete"))
 
 
 def deploy_payload(
@@ -950,6 +1042,9 @@ def deploy(
           <form method="get" action="/config">
             <button type="submit">View Config</button>
           </form>
+          <form method="get" action="/terminal">
+            <button class="secondary-button" type="submit">Operations Terminal</button>
+          </form>
           <form method="get" action="/setup">
             <button class="secondary-button" type="submit">Edit Setup</button>
           </form>
@@ -973,6 +1068,16 @@ def deploy(
         {action_html}
       </section>
     """, step=complete_step), status_code=status_code)
+
+
+@app.get("/terminal", response_class=HTMLResponse)
+def terminal() -> HTMLResponse:
+    return terminal_panel("deploy-log")
+
+
+@app.post("/terminal", response_class=HTMLResponse)
+def run_terminal(command_id: str = Form("deploy-log")) -> HTMLResponse:
+    return terminal_panel(command_id)
 
 
 @app.get("/config", response_class=HTMLResponse)
@@ -999,6 +1104,9 @@ def view_config() -> str:
           <form method="get" action="/finish">
             <button type="submit">Finish</button>
           </form>
+          <form method="get" action="/terminal">
+            <button class="secondary-button" type="submit">Operations Terminal</button>
+          </form>
           <form method="get" action="/setup">
             <button class="secondary-button" type="submit">Edit Setup</button>
           </form>
@@ -1018,6 +1126,9 @@ def finish() -> str:
         <div class="button-row">
           <form method="get" action="/config">
             <button type="submit">View Config</button>
+          </form>
+          <form method="get" action="/terminal">
+            <button class="secondary-button" type="submit">Operations Terminal</button>
           </form>
           <form method="get" action="/setup">
             <button class="secondary-button" type="submit">Edit Setup</button>

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import yaml
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 app = FastAPI(title="KronosDX Agent")
@@ -45,6 +45,42 @@ class DeployRequest(BaseModel):
     expected_nodes: Optional[int] = None
     join_endpoint: str = ""
     disks: list[str]
+
+
+class OperationRequest(BaseModel):
+    command_id: str
+
+
+OPERATION_COMMANDS = {
+    "services": {
+        "label": "Service status",
+        "command": ["systemctl", "status", "kdx-agent.service", "kdx-wizard.service", "rustfs.service", "--no-pager", "--full"],
+    },
+    "backend-logs": {
+        "label": "NAR backend logs",
+        "command": ["journalctl", "-u", "rustfs.service", "-n", "160", "--no-pager"],
+    },
+    "wizard-logs": {
+        "label": "Wizard logs",
+        "command": ["journalctl", "-u", "kdx-wizard.service", "-n", "120", "--no-pager"],
+    },
+    "agent-logs": {
+        "label": "Agent logs",
+        "command": ["journalctl", "-u", "kdx-agent.service", "-n", "120", "--no-pager"],
+    },
+    "ports": {
+        "label": "Listening ports",
+        "command": ["ss", "-tlnp"],
+    },
+    "containers": {
+        "label": "Containers",
+        "command": ["podman", "ps"],
+    },
+    "firewall": {
+        "label": "Firewall ports",
+        "command": ["firewall-cmd", "--list-ports"],
+    },
+}
 
 
 @app.get("/health")
@@ -158,6 +194,92 @@ def appliance_status() -> dict[str, Any]:
     }
 
 
+@app.get("/ops/commands")
+def operation_commands() -> dict[str, list[dict[str, str]]]:
+    commands = [
+        {"id": command_id, "label": str(details["label"])}
+        for command_id, details in OPERATION_COMMANDS.items()
+    ]
+    commands.extend(
+        [
+            {"id": "deploy-log", "label": "Deploy log"},
+            {"id": "storage-plan", "label": "Storage plan"},
+            {"id": "config", "label": "Redacted config"},
+            {"id": "credentials-info", "label": "Credential file"},
+        ]
+    )
+    return {"commands": commands}
+
+
+@app.get("/ops/deploy-log")
+def deploy_log() -> dict[str, str]:
+    log_path = KDX_STATE / "last-deploy.log"
+    return {
+        "label": "Deploy log",
+        "path": str(log_path),
+        "output": _tail_file(log_path),
+    }
+
+
+@app.post("/ops/run")
+def run_operation(payload: OperationRequest) -> dict[str, Any]:
+    command_id = payload.command_id.strip()
+    if command_id == "deploy-log":
+        result = deploy_log()
+        result.update({"command": f"tail -n 240 {result['path']}", "returncode": 0})
+        return result
+    if command_id == "storage-plan":
+        path = KDX_STATE / "storage-plan.yml"
+        return {
+            "label": "Storage plan",
+            "command": f"cat {path}",
+            "path": str(path),
+            "returncode": 0,
+            "output": _tail_file(path, lines=240),
+        }
+    if command_id == "config":
+        path = KDX_ETC / "config.yml"
+        try:
+            output = _redacted_config(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            output = "Config has not been written yet."
+        return {
+            "label": "Redacted config",
+            "command": f"cat {path}",
+            "path": str(path),
+            "returncode": 0,
+            "output": output,
+        }
+    if command_id == "credentials-info":
+        credential_path = NAR_CREDENTIALS_FILE if NAR_CREDENTIALS_FILE.exists() else LEGACY_RUSTFS_CREDENTIALS_FILE
+        credentials = _read_env_file(credential_path)
+        access_key = credentials.get("RUSTFS_ACCESS_KEY", "not available")
+        return {
+            "label": "Credential file",
+            "command": f"stat {credential_path}",
+            "path": str(credential_path),
+            "returncode": 0,
+            "output": (
+                f"Path: {credential_path}\n"
+                f"Access key: {access_key}\n"
+                "Secret key: stored in the file on the appliance; not displayed in the web terminal.\n"
+            ),
+        }
+
+    details = OPERATION_COMMANDS.get(command_id)
+    if details is None:
+        raise HTTPException(status_code=400, detail="Unsupported operation command.")
+
+    command = list(details["command"])
+    result = _run_text(command)
+    return {
+        "label": details["label"],
+        "command": " ".join(command),
+        "returncode": result.returncode,
+        "output": (result.stdout + result.stderr).strip() or "No output.",
+    }
+
+
 @app.post("/deploy")
 def deploy(payload: DeployRequest) -> dict[str, Any]:
     config = _deployment_config(payload)
@@ -204,6 +326,24 @@ def deploy(payload: DeployRequest) -> dict[str, Any]:
 def _run_json(command: list[str]) -> Any:
     result = subprocess.run(command, check=True, capture_output=True, text=True)
     return json.loads(result.stdout)
+
+
+def _run_text(command: list[str]) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(command, capture_output=True, text=True, timeout=12)
+    except FileNotFoundError as exc:
+        return subprocess.CompletedProcess(command, 127, "", str(exc))
+    except subprocess.TimeoutExpired as exc:
+        output = (exc.stdout or "") + (exc.stderr or "")
+        return subprocess.CompletedProcess(command, 124, str(output), "Command timed out.")
+
+
+def _tail_file(path: Path, lines: int = 240) -> str:
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except FileNotFoundError:
+        return f"{path} does not exist yet."
+    return "\n".join(content[-lines:]) or "File is empty."
 
 
 def _has_mountpoint(device: dict[str, Any]) -> bool:

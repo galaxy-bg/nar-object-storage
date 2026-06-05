@@ -36,6 +36,13 @@ class AgentClient:
     def status(self) -> dict[str, Any]:
         return self._request("GET", "/status")
 
+    def operation_commands(self) -> list[dict[str, Any]]:
+        data = self._request("GET", "/ops/commands")
+        return data.get("commands", [])
+
+    def run_operation(self, command_id: str) -> dict[str, Any]:
+        return self._request("POST", "/ops/run", json={"command_id": command_id}, timeout=12.0)
+
     def deploy(self, config: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", "/deploy", timeout=DEPLOY_TIMEOUT_SECONDS, json=config)
 
