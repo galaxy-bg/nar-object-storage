@@ -2,10 +2,12 @@ from html import escape
 
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.agent_client import AgentClient, AgentUnavailable
 
 app = FastAPI(title="NAR Object Storage Wizard")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 STEPS = ("Challenge", "Setup", "Review", "Deploy", "Complete")
 
@@ -50,6 +52,21 @@ def page(content: str, step: str = "Challenge") -> str:
             justify-content: space-between;
             margin-bottom: 28px;
             padding-bottom: 20px;
+          }}
+          .brand-mark {{
+            align-items: center;
+            display: flex;
+            gap: 16px;
+          }}
+          .brand-logo {{
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid rgba(255, 255, 255, 0.82);
+            border-radius: 8px;
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+            height: 78px;
+            object-fit: contain;
+            padding: 6px;
+            width: 78px;
           }}
           .brand h1 {{
             color: #ffffff;
@@ -346,6 +363,16 @@ def page(content: str, step: str = "Challenge") -> str:
               display: grid;
               gap: 10px;
             }}
+            .brand-mark {{
+              align-items: start;
+            }}
+            .brand-logo {{
+              height: 58px;
+              width: 58px;
+            }}
+            .brand h1 {{
+              font-size: 28px;
+            }}
             .choice-grid {{
               grid-template-columns: 1fr;
             }}
@@ -439,10 +466,13 @@ def page(content: str, step: str = "Challenge") -> str:
       <body>
         <main>
           <div class="brand">
-            <div>
+            <div class="brand-mark">
+              <img class="brand-logo" src="/static/nos-kdx-logo.png" alt="NAR Object Storage logo">
+              <div>
               <h1>NAR Object Storage</h1>
               <p>Powered by KronosDX</p>
               <p class="backend-attribution">S3-compatible backend engine: RustFS</p>
+              </div>
             </div>
           </div>
           {steps}
