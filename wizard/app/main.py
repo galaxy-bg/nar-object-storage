@@ -546,6 +546,38 @@ def discovery() -> tuple[list[dict], list[dict], str]:
         return [], [], f"kdx-agent discovery is unavailable: {escape(str(exc))}"
 
 
+def appliance_configured() -> bool:
+    try:
+        return bool(AgentClient().status().get("configured"))
+    except AgentUnavailable:
+        return False
+
+
+def configured_lock_page() -> HTMLResponse:
+    access_html = status_summary()
+    return HTMLResponse(page(f"""
+      <section class="panel">
+        <h2>Appliance Already Configured</h2>
+        <p class="panel-intro">First-boot setup is locked on deployed appliances. Use the local console reset workflow before running setup again.</p>
+        {access_html}
+        <div class="section-title">Reset from local console</div>
+        <pre>sudo /opt/kronosdx/scripts/appliance-reset.sh --config-only
+sudo /opt/kronosdx/scripts/appliance-reset.sh --destroy-data --confirm "RESET NAR OBJECT STORAGE"</pre>
+        <div class="button-row">
+          <form method="get" action="/config">
+            <button type="submit">View Config</button>
+          </form>
+          <form method="get" action="/terminal">
+            <button class="secondary-button" type="submit">Operations Terminal</button>
+          </form>
+          <form method="get" action="/finish">
+            <button class="secondary-button" type="submit">Finish</button>
+          </form>
+        </div>
+      </section>
+    """, step="Complete"), status_code=409)
+
+
 def split_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
@@ -721,11 +753,16 @@ def verify_challenge(challenge_key: str = Form(...)):
 
     if not valid:
         return HTMLResponse(challenge_page("Invalid challenge key."), status_code=401)
+    if appliance_configured():
+        return RedirectResponse("/finish", status_code=303)
     return RedirectResponse("/setup", status_code=303)
 
 
 @app.get("/setup", response_class=HTMLResponse)
 def setup() -> str:
+    if appliance_configured():
+        return configured_lock_page()
+
     interfaces, disks, discovery_error = discovery()
     management_options = interface_options(interfaces)
     data_options = interface_options(interfaces, selected="")
@@ -922,6 +959,9 @@ def review(
     join_endpoint: str = Form(""),
     disks: list[str] = Form(...),
 ) -> str:
+    if appliance_configured():
+        return configured_lock_page()
+
     if admin_password != admin_password_confirm:
         return HTMLResponse(page("""
           <section class="panel">
@@ -1032,6 +1072,9 @@ def deploy(
     join_endpoint: str = Form(""),
     disks: list[str] = Form(...),
 ) -> str:
+    if appliance_configured():
+        return configured_lock_page()
+
     payload = {
         "hostname": hostname,
         "node_fqdn": node_fqdn,
@@ -1084,9 +1127,6 @@ def deploy(
           </form>
           <form method="get" action="/terminal">
             <button class="secondary-button" type="submit">Operations Terminal</button>
-          </form>
-          <form method="get" action="/setup">
-            <button class="secondary-button" type="submit">Edit Setup</button>
           </form>
           <form method="get" action="/finish">
             <button class="secondary-button" type="submit">Finish</button>

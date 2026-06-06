@@ -284,6 +284,13 @@ def run_operation(payload: OperationRequest) -> dict[str, Any]:
 
 @app.post("/deploy")
 def deploy(payload: DeployRequest) -> dict[str, Any]:
+    firstboot_path = KDX_ETC / "firstboot.state"
+    if firstboot_path.exists() and firstboot_path.read_text(encoding="utf-8").strip() == "configured":
+        raise HTTPException(
+            status_code=409,
+            detail="Appliance is already configured. Use local console reset before deploying again.",
+        )
+
     config = _deployment_config(payload)
     config_path = KDX_ETC / "config.yml"
     KDX_ETC.mkdir(parents=True, exist_ok=True)
