@@ -1,0 +1,11 @@
+[Unit]
+Description=NAR Object Storage appliance identity initializer
+After=local-fs.target
+Before=kdx-agent.service kdx-wizard.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/kronosdx/scripts/initialize-appliance-identity.sh
+
+[Install]
+WantedBy=multi-user.target

@@ -128,9 +128,11 @@ build_wizard_image() {
 }
 
 install_systemd_units() {
+  cp /opt/kronosdx/systemd/kdx-identity.service /etc/systemd/system/kdx-identity.service
   cp /opt/kronosdx/systemd/kdx-agent.service /etc/systemd/system/kdx-agent.service
   cp /opt/kronosdx/systemd/kdx-wizard.service /etc/systemd/system/kdx-wizard.service
   systemctl daemon-reload
+  systemctl enable kdx-identity.service
 }
 
 start_services() {
@@ -139,8 +141,10 @@ start_services() {
     return
   fi
 
+  systemctl enable kdx-identity.service
   systemctl enable kdx-agent.service
   systemctl enable kdx-wizard.service
+  systemctl start kdx-identity.service
   systemctl restart kdx-agent.service
   systemctl restart kdx-wizard.service
   sleep 2
@@ -202,25 +206,8 @@ copy_tree systemd /opt/kronosdx/systemd
 
 install_agent_python_env
 
-if [[ ! -f "${TARGET_ROOT%/}/etc/kronosdx/challenge.key" ]]; then
-  openssl rand -hex 16 > "${TARGET_ROOT%/}/etc/kronosdx/challenge.key"
-  chmod 0600 "${TARGET_ROOT%/}/etc/kronosdx/challenge.key"
-fi
-
-if [[ ! -f "${TARGET_ROOT%/}/etc/kronosdx/secrets/agent.token" ]]; then
-  openssl rand -hex 32 > "${TARGET_ROOT%/}/etc/kronosdx/secrets/agent.token"
-  chmod 0600 "${TARGET_ROOT%/}/etc/kronosdx/secrets/agent.token"
-fi
-
-if [[ ! -f "${TARGET_ROOT%/}/etc/kronosdx/secrets/maintenance.key" ]]; then
-  openssl rand -hex 32 > "${TARGET_ROOT%/}/etc/kronosdx/secrets/maintenance.key"
-  chmod 0600 "${TARGET_ROOT%/}/etc/kronosdx/secrets/maintenance.key"
-fi
-
-if [[ ! -f "${TARGET_ROOT%/}/etc/kronosdx/firstboot.state" ]]; then
-  printf "pending\n" > "${TARGET_ROOT%/}/etc/kronosdx/firstboot.state"
-  chmod 0600 "${TARGET_ROOT%/}/etc/kronosdx/firstboot.state"
-fi
+KDX_ETC="${TARGET_ROOT%/}/etc/kronosdx" KDX_STATE="${TARGET_ROOT%/}/var/lib/kronosdx" \
+  bash "${SOURCE_ROOT}/scripts/initialize-appliance-identity.sh"
 
 write_version_file
 

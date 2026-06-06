@@ -5,6 +5,8 @@ KDX_ETC="${KDX_ETC:-/etc/kronosdx}"
 CHALLENGE_KEY_FILE="${KDX_ETC}/challenge.key"
 MAINTENANCE_KEY_FILE="${KDX_ETC}/secrets/maintenance.key"
 VERSION_FILE="${KDX_ETC}/version.yml"
+RESET_SCRIPT="/opt/kronosdx/scripts/appliance-reset.sh"
+GOLDEN_IMAGE_SCRIPT="/opt/kronosdx/scripts/prepare-golden-image.sh"
 
 require_root() {
   if [[ "$(id -u)" -ne 0 ]]; then
@@ -68,6 +70,30 @@ Planned controls:
 EOF
 }
 
+factory_reset_menu() {
+  cat <<EOF
+Factory reset options:
+
+Config-only reset:
+  ${RESET_SCRIPT} --config-only
+
+Destroy NAR Object Storage data and reset:
+  ${RESET_SCRIPT} --destroy-data --confirm "RESET NAR OBJECT STORAGE"
+
+Run these commands only from a trusted local console.
+EOF
+}
+
+golden_image_menu() {
+  cat <<EOF
+Golden image preparation:
+
+  ${GOLDEN_IMAGE_SCRIPT} --confirm "PREPARE NAR GOLDEN IMAGE"
+
+Run this immediately before shutting down the VM and converting it to a template.
+EOF
+}
+
 menu() {
   cat <<'EOF'
 NAR Object Storage Console
@@ -75,8 +101,9 @@ NAR Object Storage Console
 1. Show version information
 2. Show first-boot challenge key
 3. Generate maintenance challenge response
-4. Factory reset appliance (disabled)
-5. Reset root password (disabled)
+4. Factory reset appliance
+5. Prepare golden image
+6. Reset root password (disabled)
 0. Exit
 EOF
 }
@@ -93,8 +120,9 @@ while true; do
     1) show_version ;;
     2) show_first_boot_challenge ;;
     3) generate_maintenance_response ;;
-    4) disabled_action "Factory reset" ;;
-    5) disabled_action "Root password reset" ;;
+    4) factory_reset_menu ;;
+    5) golden_image_menu ;;
+    6) disabled_action "Root password reset" ;;
     0) exit 0 ;;
     *) echo "Invalid selection." ;;
   esac

@@ -13,7 +13,8 @@ Current menu:
 - show version information
 - show first-boot challenge key
 - generate maintenance challenge response
-- factory reset placeholder
+- show factory reset commands
+- show golden image preparation command
 - root password reset placeholder
 
 ## Version File
@@ -48,4 +49,6 @@ Maintenance challenge response uses:
 
 The console generates a random challenge and an HMAC-SHA256 response. Later milestones can require that response before allowing sensitive actions such as factory reset or root password reset.
 
-Sensitive actions are intentionally disabled in Milestone 1.
+Factory reset and golden image preparation are local-console script workflows.
+The menu prints the exact commands and confirmation phrases rather than running
+destructive actions directly.
