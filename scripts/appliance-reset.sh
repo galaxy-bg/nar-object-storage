@@ -56,7 +56,7 @@ reset_config_state() {
   rm -f "${KDX_STATE}/logs/"*.log
 
   rm -f "${KDX_ETC}/challenge.key"
-  KDX_ETC="$KDX_ETC" KDX_STATE="$KDX_STATE" /opt/kronosdx/scripts/initialize-appliance-identity.sh
+  KDX_ETC="$KDX_ETC" KDX_STATE="$KDX_STATE" bash /opt/kronosdx/scripts/initialize-appliance-identity.sh
 }
 
 storage_mountpoints() {

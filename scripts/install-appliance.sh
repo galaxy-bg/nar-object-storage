@@ -203,6 +203,7 @@ copy_tree agent /opt/kronosdx/agent
 copy_tree wizard /opt/kronosdx/wizard
 copy_tree scripts /opt/kronosdx/scripts
 copy_tree systemd /opt/kronosdx/systemd
+chmod 0755 "${TARGET_ROOT%/}/opt/kronosdx/scripts/"*.sh
 
 install_agent_python_env
 

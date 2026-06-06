@@ -5,7 +5,7 @@ Before=kdx-agent.service kdx-wizard.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/kronosdx/scripts/initialize-appliance-identity.sh
+ExecStart=/usr/bin/bash /opt/kronosdx/scripts/initialize-appliance-identity.sh
 
 [Install]
 WantedBy=multi-user.target
