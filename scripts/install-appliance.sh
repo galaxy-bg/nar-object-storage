@@ -124,7 +124,7 @@ build_wizard_image() {
     return
   fi
 
-  podman build -t localhost/kdx-wizard:latest /opt/kronosdx/wizard
+  podman build --no-cache -t localhost/kdx-wizard:latest /opt/kronosdx/wizard
 }
 
 install_systemd_units() {
@@ -147,11 +147,30 @@ start_services() {
   systemctl start kdx-identity.service
   systemctl restart kdx-agent.service
   systemctl restart kdx-wizard.service
-  sleep 2
+  wait_for_port 8443 20
   systemctl --no-pager --full status kdx-agent.service kdx-wizard.service || true
   if command -v ss >/dev/null 2>&1 && ! ss -tln | grep -q ':8443 '; then
     echo "Warning: kdx-wizard is not listening on TCP port 8443 yet. Check journalctl -u kdx-wizard -n 80 --no-pager." >&2
   fi
+}
+
+wait_for_port() {
+  local port="$1"
+  local seconds="$2"
+  local waited=0
+
+  if ! command -v ss >/dev/null 2>&1; then
+    sleep 2
+    return
+  fi
+
+  while [[ "$waited" -lt "$seconds" ]]; do
+    if ss -tln | grep -q ":${port} "; then
+      return
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
 }
 
 write_version_file() {
